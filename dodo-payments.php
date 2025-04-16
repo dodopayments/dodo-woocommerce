@@ -30,6 +30,7 @@ if (!in_array('woocommerce/woocommerce.php', apply_filters('active_plugins', get
 require_once plugin_dir_path(__FILE__) . 'includes/class-dodo-payments-db.php';
 require_once plugin_dir_path(__FILE__) . 'includes/class-dodo-payments-payment-db.php';
 require_once plugin_dir_path(__FILE__) . 'includes/class-standard-webhook.php';
+require_once plugin_dir_path(__FILE__) . 'includes/class-dodo-payments-api.php';
 
 // Create database tables on plugin activation
 register_activation_hook(__FILE__, function () {
@@ -253,33 +254,18 @@ function dodo_payments_init()
           $product = $item->get_product();
           $local_product_id = $product->get_id();
 
+          $dodo_api = new Dodo_Payments_API($this->testmode, $this->api_key);
+
           // Check if product is already mapped
           $dodo_product_id = Dodo_Payments_DB::get_dodo_product_id($local_product_id);
+          $dodo_product_exists = false;
 
-          if (!$dodo_product_id) {
-            $body = array(
-              'name' => $product->get_name(),
-              'price' => array(
-                'type' => 'one_time_price',
-                'currency' => get_woocommerce_currency(),
-                'price' => (int) $product->get_price() * 100,
-                'discount' => 0, // todo: update defaults
-                'purchasing_power_parity' => false // todo: update defaults
-              ),
-              'tax_category' => 'digital_products' // todo: update default
-            );
+          if ($dodo_product_id) {
+            $dodo_product_exists = (bool) $dodo_api->get_product($dodo_product_id);
+          }
 
-            // Create product in Dodo Payments
-            $response = wp_remote_post(
-              $this->get_base_url() . '/products',
-              array(
-                'headers' => array(
-                  'Authorization' => 'Bearer ' . $this->api_key,
-                  'Content-Type' => 'application/json',
-                ),
-                'body' => json_encode($body),
-              )
-            );
+          if (!$dodo_product_id || !$dodo_product_exists) {
+            $response = $dodo_api->create_product($product);
 
             if (is_wp_error($response)) {
               $order->add_order_note(
@@ -294,7 +280,6 @@ function dodo_payments_init()
             $status = wp_remote_retrieve_response_code($response);
 
             if ($status !== 200) {
-              // TODO: create a new product and update mapping in case of 404
               $order->add_order_note(
                 sprintf(
                   __('Failed to create product in Dodo Payments: Invalid response %s', 'dodo-payments'),
@@ -310,6 +295,8 @@ function dodo_payments_init()
               $dodo_product_id = $response_body['product_id'];
               // Save the mapping
               Dodo_Payments_DB::save_mapping($local_product_id, $dodo_product_id);
+              // upload image to dodo payments
+              $dodo_api->upload_image_for_product($product, $dodo_product_id);
             } else {
               $order->add_order_note(
                 sprintf(
@@ -338,8 +325,6 @@ function dodo_payments_init()
 
       public function webhook()
       {
-        error_log("Webhook received");
-
         $headers = [
           'webhook-signature' => $_SERVER['HTTP_WEBHOOK_SIGNATURE'],
           'webhook-id' => $_SERVER['HTTP_WEBHOOK_ID'],
