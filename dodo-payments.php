@@ -26,11 +26,16 @@ if (!in_array('woocommerce/woocommerce.php', apply_filters('active_plugins', get
   return;
 }
 
-// Include database class
+// Include database classes
 require_once plugin_dir_path(__FILE__) . 'includes/class-dodo-payments-db.php';
+require_once plugin_dir_path(__FILE__) . 'includes/class-dodo-payments-payment-db.php';
+require_once plugin_dir_path(__FILE__) . 'includes/class-standard-webhook.php';
 
-// Create database table on plugin activation
-register_activation_hook(__FILE__, 'Dodo_Payments_DB::create_table');
+// Create database tables on plugin activation
+register_activation_hook(__FILE__, function () {
+  Dodo_Payments_DB::create_table();
+  Dodo_Payments_Payment_DB::create_table();
+});
 
 // Make the plugin HPOS compatible
 add_action('before_woocommerce_init', function () {
@@ -76,6 +81,9 @@ function dodo_payments_init()
         add_action('woocommerce_update_options_payment_gateways_' . $this->id, array($this, 'process_admin_options'));
 
         add_action('woocommerce_thankyou_' . $this->id, array($this, 'thank_you_page'));
+
+        // webhook to http://localhost:8080/wc-api/dodo_payments
+        add_action('woocommerce_api_' . $this->id, array($this, 'webhook'));
       }
 
       public function init_form_fields()
@@ -208,10 +216,15 @@ function dodo_payments_init()
         $response_body = json_decode(wp_remote_retrieve_body($response), true);
 
         if (isset($response_body['payment_link'])) {
-          $order->add_order_note(
-            __('Payment created in Dodo Payments: %s', 'dodo-payments'),
-            $response_body['payment_link']
-          );
+          // Save the payment mapping
+          if (isset($response_body['payment_id'])) {
+            Dodo_Payments_Payment_DB::save_mapping($order->get_id(), $response_body['payment_id']);
+
+            $order->add_order_note(
+              __('Payment created in Dodo Payments: %s', 'dodo-payments'),
+              $response_body['payment_id']
+            );
+          }
 
           return array(
             'result' => 'success',
@@ -242,8 +255,6 @@ function dodo_payments_init()
 
           // Check if product is already mapped
           $dodo_product_id = Dodo_Payments_DB::get_dodo_product_id($local_product_id);
-
-
 
           if (!$dodo_product_id) {
             $body = array(
@@ -280,6 +291,19 @@ function dodo_payments_init()
               continue;
             }
 
+            $status = wp_remote_retrieve_response_code($response);
+
+            if ($status !== 200) {
+              // TODO: create a new product and update mapping in case of 404
+              $order->add_order_note(
+                sprintf(
+                  __('Failed to create product in Dodo Payments: Invalid response %s', 'dodo-payments'),
+                  $response_body
+                )
+              );
+              continue;
+            }
+
             $response_body = json_decode(wp_remote_retrieve_body($response), true);
 
             if (isset($response_body['product_id'])) {
@@ -304,7 +328,6 @@ function dodo_payments_init()
           );
         }
 
-        // TODO: Use the mapped_products array to create the payment in Dodo Payments
         return $mapped_products;
       }
 
@@ -313,9 +336,139 @@ function dodo_payments_init()
         return $this->testmode ? 'https://test.dodopayments.com' : 'https://live.dodopayments.com';
       }
 
-      public function webhook_handler()
+      public function webhook()
       {
+        error_log("Webhook received");
 
+        $headers = [
+          'webhook-signature' => $_SERVER['HTTP_WEBHOOK_SIGNATURE'],
+          'webhook-id' => $_SERVER['HTTP_WEBHOOK_ID'],
+          'webhook-timestamp' => $_SERVER['HTTP_WEBHOOK_TIMESTAMP'],
+        ];
+
+        $body = file_get_contents('php://input');
+
+        try {
+          $webhook = new StandardWebhook($this->webhook_key);
+        } catch (\Exception $e) {
+          error_log("Invalid webhook key: " . $e->getMessage());
+
+          // Silently consume the webhook event
+          status_header(200);
+          return;
+        }
+
+        try {
+          $payload = $webhook->verify($body, $headers);
+        } catch (Exception $e) {
+          error_log("Could not verify webhook event: " . $e->getMessage());
+
+          // Silently consume the webhook event
+          status_header(200);
+          return;
+        }
+
+        // Can be
+        // payment.succeeded, payment.failed, payment.processing, payment.cancelled, 
+        // refund.succeeded, refund.failed, 
+        // dispute.opened, dispute.expired, dispute.accepted, dispute.cancelled, 
+        // dispute.challenged, dispute.won, dispute.lost, 
+        // subscription.active, subscription.renewed, subscription.on_hold, 
+        // subscription.paused, subscription.cancelled, subscription.failed, 
+        // subscription.expired, 
+        // license_key.created 
+        $type = $payload['type'];
+
+        if (substr($type, 0, 7) === 'payment') {
+          $payment_id = $payload['data']['payment_id'];
+          $order_id = Dodo_Payments_Payment_DB::get_order_id($payment_id);
+
+          if (!$order_id) {
+            error_log("Could not find order_id for payment: " . $payment_id);
+
+            // Silently consume the webhook event
+            status_header(200);
+            return;
+          }
+
+          $order = wc_get_order($order_id);
+
+          if (!$order) {
+            error_log("Could not find order: " . $order_id);
+
+            // Silently consume the webhook event
+            status_header(200);
+            return;
+          }
+
+          $order->payment_complete($payment_id);
+
+          switch ($type) {
+            case 'payment.succeeded':
+              $order->update_status('completed', __('Payment completed by Dodo Payments', 'dodo-payments'));
+              break;
+
+
+            case 'payment.failed':
+              $order->update_status('failed', __('Payment failed by Dodo Payments', 'dodo-payments'));
+              break;
+
+            case 'payment.cancelled':
+              $order->update_status('cancelled', __('Payment cancelled by Dodo Payments', 'dodo-payments'));
+              break;
+
+            case 'payment.processing':
+            default:
+              $order->update_status('processing', __('Payment processing by Dodo Payments', 'dodo-payments'));
+              break;
+          }
+        }
+
+        if (substr($type, 0, 6) === 'refund') {
+          $payment_id = $payload['data']['payment_id'];
+          $order_id = Dodo_Payments_Payment_DB::get_order_id($payment_id);
+
+          if (!$order_id) {
+            error_log("Could not find order for payment: " . $payment_id);
+
+            // Silently consume the webhook event
+            status_header(200);
+            return;
+          }
+
+          $order = wc_get_order($order_id);
+
+          if (!$order) {
+            error_log("Could not find order: " . $order_id);
+
+            // Silently consume the webhook event
+            status_header(200);
+            return;
+          }
+
+          switch ($type) {
+            case 'refund.succeeded':
+              $order->update_status('refunded', __('Payment refunded by Dodo Payments', 'dodo-payments'));
+
+              $order->add_order_note(
+                __('Refunded payment in Dodo Payments. Payment ID: %s, Refund ID: %s', 'dodo-payments'),
+                $payment_id,
+                $payload['data']['refund_id']
+              );
+              break;
+
+            case 'refund.failed':
+              $order->add_order_note(
+                __('Refund failed in Dodo Payments. Payment ID: %s, Refund ID: %s', 'dodo-payments'),
+                $payment_id,
+                $payload['data']['refund_id']
+              );
+              break;
+          }
+        }
+
+        status_header(200);
+        return;
       }
     }
   }
