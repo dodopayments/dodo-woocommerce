@@ -73,8 +73,14 @@ class Dodo_Payments_API
    */
   public function update_product($dodo_product_id, $product)
   {
+    $dodo_product = $this->get_product($dodo_product_id);
+
+    if (!$dodo_product) {
+      throw new Exception("Product ($dodo_product_id) not found");
+    }
+
     // ignore global options, respect the tax_category and tax_inclusive set
-    // on the dashboard
+    // from the dashboard
     $body = array(
       'name' => $product->get_name(),
       'description' => $product->get_description(),
@@ -82,7 +88,11 @@ class Dodo_Payments_API
         'type' => 'one_time_price',
         'currency' => get_woocommerce_currency(),
         'price' => (int) $product->get_price() * 100, // fixme: assuming that the currency is INR or USD
+        'discount' => $dodo_product['price']['discount'],
+        'purchasing_power_parity' => $dodo_product['price']['purchasing_power_parity'],
+        'tax_inclusive' => $dodo_product['price']['tax_inclusive'],
       ),
+      'tax_category' => $dodo_product['tax_category'],
     );
 
     $res = $this->patch("/products/{$dodo_product_id}", $body);
@@ -260,7 +270,7 @@ class Dodo_Payments_API
       return false;
     }
 
-    return json_decode($res['body']);
+    return json_decode($res['body'], true);
   }
 
   private function post($path, $body)
