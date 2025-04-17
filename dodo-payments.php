@@ -289,13 +289,28 @@ function dodo_payments_init()
 
           // Check if product is already mapped
           $dodo_product_id = Dodo_Payments_DB::get_dodo_product_id($local_product_id);
-          $dodo_product_exists = false;
+          $dodo_product = null;
 
           if ($dodo_product_id) {
-            $dodo_product_exists = (bool) $dodo_api->get_product($dodo_product_id);
+            $dodo_product = $dodo_api->get_product($dodo_product_id);
+
+            if (!!$dodo_product) {
+              try {
+                $dodo_api->update_product($dodo_product['product_id'], $product);
+              } catch (Exception $e) {
+                $order->add_order_note(
+                  sprintf(
+                    __('Failed to update product in Dodo Payments: %s', 'dodo-payments'),
+                    $e->getMessage(),
+                  )
+                );
+                error_log($e->getMessage());
+                continue;
+              }
+            }
           }
 
-          if (!$dodo_product_id || !$dodo_product_exists) {
+          if (!$dodo_product_id || !$dodo_product) {
             try {
               $response_body = $dodo_api->create_product($product);
             } catch (Exception $e) {

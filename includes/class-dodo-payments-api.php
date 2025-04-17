@@ -64,6 +64,41 @@ class Dodo_Payments_API
   }
 
   /**
+   * Update a product in the Dodo Payments API
+   * 
+   * @param string $dodo_product_id
+   * @param WC_Product $product
+   * @throws \Exception
+   * @return void
+   */
+  public function update_product($dodo_product_id, $product)
+  {
+    // ignore global options, respect the tax_category and tax_inclusive set
+    // on the dashboard
+    $body = array(
+      'name' => $product->get_name(),
+      'description' => $product->get_description(),
+      'price' => array(
+        'type' => 'one_time_price',
+        'currency' => get_woocommerce_currency(),
+        'price' => (int) $product->get_price() * 100, // fixme: assuming that the currency is INR or USD
+      ),
+    );
+
+    $res = $this->patch("/products/{$dodo_product_id}", $body);
+
+    if (is_wp_error($res)) {
+      throw new Exception("Failed to update product: " . $res->get_error_message());
+    }
+
+    if (wp_remote_retrieve_response_code($res) !== 200) {
+      throw new Exception("Failed to update product: " . $res['body']);
+    }
+
+    return;
+  }
+
+  /**
    * Syncs the image for a product
    * 
    * @param WC_Product $product
@@ -117,15 +152,7 @@ class Dodo_Payments_API
    */
   private function get_upload_url_and_image_id($dodo_product_id)
   {
-    $res = wp_remote_request(
-      $this->get_base_url() . '/products/' . $dodo_product_id . '/images?force_update=true',
-      array(
-        'method' => 'PUT',
-        'headers' => array(
-          'Authorization' => 'Bearer ' . $this->api_key,
-        ),
-      )
-    );
+    $res = $this->put("/products/{$dodo_product_id}/images?force_update=true", null);
 
     if (is_wp_error($res))
       throw new Exception("Failed to get upload url and image id for product ($dodo_product_id): " . $res->get_error_message());
@@ -134,6 +161,34 @@ class Dodo_Payments_API
       throw new Exception("Failed to get upload url and image id for product ($dodo_product_id): " . $res['body']);
 
     return json_decode($res['body'], true);
+  }
+
+  private function put($path, $body)
+  {
+    return wp_remote_request(
+      $this->get_base_url() . $path,
+      array(
+        'method' => 'PUT',
+        'headers' => array(
+          'Authorization' => 'Bearer ' . $this->api_key,
+        )
+      )
+    );
+  }
+
+  private function patch($path, $body)
+  {
+    return wp_remote_request(
+      $this->get_base_url() . $path,
+      array(
+        'method' => 'PATCH',
+        'headers' => array(
+          'Authorization' => 'Bearer ' . $this->api_key,
+          'Content-Type' => 'application/json',
+        ),
+        'body' => json_encode($body),
+      )
+    );
   }
 
   /**
@@ -146,17 +201,7 @@ class Dodo_Payments_API
    */
   private function set_product_image_id($dodo_product_id, $image_id)
   {
-    $res = wp_remote_request(
-      $this->get_base_url() . '/products/' . $dodo_product_id,
-      array(
-        'method' => 'PATCH',
-        'headers' => array(
-          'Authorization' => 'Bearer ' . $this->api_key,
-          'Content-Type' => 'application/json',
-        ),
-        'body' => json_encode(array('image_id' => $image_id)),
-      )
-    );
+    $res = $this->patch("/products/{$dodo_product_id}", array('image_id' => $image_id));
 
     if (is_wp_error($res))
       throw new Exception("Failed to assign image ($image_id) to product ($dodo_product_id): " . $res->get_error_message());
@@ -167,6 +212,40 @@ class Dodo_Payments_API
     return;
   }
 
+  /**
+   * Get a product from the Dodo Payments API
+   * 
+   * @param string $dodo_product_id
+   * @return array{
+   *    addons: array<string>,
+   *    business_id: string,
+   *    created_at: string,
+   *    description: string,
+   *    image: string,
+   *    is_recurring: bool,
+   *    license_key_activation_message: string,
+   *    license_key_activations_limit: int,
+   *    license_key_duration: array{
+   *      count: int,
+   *      interval: string
+   *    },
+   *    license_key_enabled: bool,
+   *    name: string,
+   *    price: array{
+   *      currency: string,
+   *      discount: int,
+   *      pay_what_you_want: bool,
+   *      price: int,
+   *      purchasing_power_parity: bool,
+   *      suggested_price: int,
+   *      tax_inclusive: bool,
+   *      type: string
+   *    },
+   *    product_id: string,
+   *    tax_category: string,
+   *    updated_at: string
+   * }|false
+   */
   public function get_product($dodo_product_id)
   {
     $res = $this->get("/products/{$dodo_product_id}");
