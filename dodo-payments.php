@@ -430,10 +430,12 @@ function dodo_payments_init()
 
             case 'payment.failed':
               $order->update_status('failed', __('Payment failed by Dodo Payments', 'dodo-payments'));
+              wc_increase_stock_levels($order_id);
               break;
 
             case 'payment.cancelled':
               $order->update_status('cancelled', __('Payment cancelled by Dodo Payments', 'dodo-payments'));
+              wc_increase_stock_levels($order_id);
               break;
 
             case 'payment.processing':
