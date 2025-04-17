@@ -52,11 +52,14 @@ function dodo_payments_init()
   if (class_exists('WC_Payment_Gateway')) {
     class WC_Dodo_Payments_Gateway extends WC_Payment_Gateway
     {
-      public $instructions;
+      public null|string $instructions;
 
-      public $testmode;
-      public $api_key;
-      public $webhook_key;
+      public bool $testmode;
+      public string $api_key;
+      public string $webhook_key;
+
+      public string $global_tax_category;
+      public bool $global_tax_inclusive;
 
       public function __construct()
       {
@@ -75,6 +78,9 @@ function dodo_payments_init()
         $this->testmode = 'yes' === $this->get_option('testmode');
         $this->api_key = $this->testmode ? $this->get_option('test_api_key') : $this->get_option('live_api_key');
         $this->webhook_key = $this->get_option('webhook_key');
+
+        $this->global_tax_category = $this->get_option('global_tax_category');
+        $this->global_tax_inclusive = 'yes' === $this->get_option('global_tax_inclusive');
 
         $this->init_form_fields();
         $this->init_settings();
@@ -143,6 +149,26 @@ function dodo_payments_init()
             'default' => '',
             'desc_tip' => true,
             'description' => __('Enter your Webhook Key here.', 'dodo-payments'),
+          ),
+          'global_tax_category' => array(
+            'title' => __('Global Tax Category', 'dodo-payments'),
+            'type' => 'select',
+            'options' => array(
+              'digital_products' => __('Digital Products', 'dodo-payments'),
+              'saas' => __('SaaS', 'dodo-payments'),
+              'e_book' => __('E-Book', 'dodo-payments'),
+              'edtech' => __('EdTech', 'dodo-payments'),
+            ),
+            'default' => 'digital_products',
+            'desc_tip' => true,
+            'description' => __('Select the tax category for all products. You can override this on a per-product basis on Dodo Payments Dashboard.', 'dodo-payments'),
+          ),
+          'global_tax_inclusive' => array(
+            'title' => __('All Prices Tax Inclusive', 'dodo-payments'),
+            'type' => 'checkbox',
+            'default' => 'no',
+            'desc_tip' => true,
+            'description' => __('Select if tax is included on all product prices. You can override this on a per-product basis on Dodo Payments Dashboard.', 'dodo-payments'),
           ),
         );
       }
@@ -254,7 +280,12 @@ function dodo_payments_init()
           $product = $item->get_product();
           $local_product_id = $product->get_id();
 
-          $dodo_api = new Dodo_Payments_API($this->testmode, $this->api_key);
+          $dodo_api = new Dodo_Payments_API(array(
+            'testmode' => $this->testmode,
+            'api_key' => $this->api_key,
+            'global_tax_category' => $this->global_tax_category,
+            'global_tax_inclusive' => $this->global_tax_inclusive,
+          ));
 
           // Check if product is already mapped
           $dodo_product_id = Dodo_Payments_DB::get_dodo_product_id($local_product_id);
@@ -265,46 +296,34 @@ function dodo_payments_init()
           }
 
           if (!$dodo_product_id || !$dodo_product_exists) {
-            $response = $dodo_api->create_product($product);
-
-            if (is_wp_error($response)) {
+            try {
+              $response_body = $dodo_api->create_product($product);
+            } catch (Exception $e) {
               $order->add_order_note(
                 sprintf(
-                  __('Failed to create product in Dodo Payments: %s', 'dodo-payments'),
-                  $response->get_error_message()
+                  __('Dodo Payments Error: %s', 'dodo-payments'),
+                  $e->getMessage(),
                 )
               );
+              error_log($e->getMessage());
               continue;
             }
 
-            $status = wp_remote_retrieve_response_code($response);
+            $dodo_product_id = $response_body['product_id'];
+            // Save the mapping
+            Dodo_Payments_DB::save_mapping($local_product_id, $dodo_product_id);
 
-            if ($status !== 200) {
+            // sync image to dodo payments
+            try {
+              $dodo_api->sync_image_for_product($product, $dodo_product_id);
+            } catch (Exception $e) {
               $order->add_order_note(
                 sprintf(
-                  __('Failed to create product in Dodo Payments: Invalid response %s', 'dodo-payments'),
-                  $response_body
+                  __('Failed to sync image for product in Dodo Payments: %s', 'dodo-payments'),
+                  $e->getMessage(),
                 )
               );
-              continue;
-            }
-
-            $response_body = json_decode(wp_remote_retrieve_body($response), true);
-
-            if (isset($response_body['product_id'])) {
-              $dodo_product_id = $response_body['product_id'];
-              // Save the mapping
-              Dodo_Payments_DB::save_mapping($local_product_id, $dodo_product_id);
-              // upload image to dodo payments
-              $dodo_api->upload_image_for_product($product, $dodo_product_id);
-            } else {
-              $order->add_order_note(
-                sprintf(
-                  __('Failed to create product in Dodo Payments: Invalid response %s', 'dodo-payments'),
-                  json_encode($response_body)
-                )
-              );
-              continue;
+              error_log($e->getMessage());
             }
           }
 

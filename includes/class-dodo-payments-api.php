@@ -4,34 +4,63 @@ class Dodo_Payments_API
 {
   private bool $testmode;
   private string $api_key;
+  /**
+   * Can be 'digital_products', 'saas', 'e_book', 'edtech'
+   * @var string
+   */
+  private string $global_tax_category;
+  /**
+   * Whether tax is included in all product prices
+   * @var bool
+   */
+  private bool $global_tax_inclusive;
 
-  public function __construct(bool $testmode, string $api_key)
+  /**
+   * Summary of __construct
+   * @param array{testmode: bool, api_key: string, global_tax_category: string, global_tax_inclusive: bool} $options
+   */
+  public function __construct($options)
   {
-    $this->testmode = $testmode;
-    $this->api_key = $api_key;
+    $this->testmode = $options['testmode'];
+    $this->api_key = $options['api_key'];
+    $this->global_tax_category = $options['global_tax_category'];
+    $this->global_tax_inclusive = $options['global_tax_inclusive'];
   }
 
   /**
    * Creates a product
    * 
-   * @param WC_Product $product
-   * @return array|WP_Error
+   * @param WC_Product $product Product in WooCommerce
+   * @return array{product_id: string} Product in the Dodo Payments API 
+   * @throws \Exception
    */
   public function create_product($product)
   {
     $body = array(
       'name' => $product->get_name(),
+      'description' => $product->get_description(),
       'price' => array(
         'type' => 'one_time_price',
         'currency' => get_woocommerce_currency(),
-        'price' => (int) $product->get_price() * 100, // warn: considering that the currency is INR or USD
+        'price' => (int) $product->get_price() * 100, // fixme: assuming that the currency is INR or USD
         'discount' => 0, // todo: update defaults
-        'purchasing_power_parity' => false // todo: update defaults
+        'purchasing_power_parity' => false, // todo: deal with it when the feature is implemented
+        'tax_inclusive' => $this->global_tax_inclusive,
       ),
-      'tax_category' => 'digital_products' // todo: update default
+      'tax_category' => $this->global_tax_category,
     );
 
-    return $this->post('/products', $body);
+    $res = $this->post('/products', $body);
+
+    if (is_wp_error($res)) {
+      throw new Exception("Failed to create product: " . $res->get_error_message());
+    }
+
+    if (wp_remote_retrieve_response_code($res) !== 200) {
+      throw new Exception("Failed to create product: " . $res['body']);
+    }
+
+    return json_decode($res['body'], true);
   }
 
   /**
@@ -42,7 +71,7 @@ class Dodo_Payments_API
    * @throws \Exception
    * @return void
    */
-  public function upload_image_for_product($product, $dodo_product_id)
+  public function sync_image_for_product($product, $dodo_product_id)
   {
     $image_id = $product->get_image_id();
 
@@ -178,10 +207,9 @@ class Dodo_Payments_API
         ),
       )
     );
-
   }
 
-  public function get_base_url()
+  private function get_base_url()
   {
     return $this->testmode ? 'https://test.dodopayments.com' : 'https://live.dodopayments.com';
   }
