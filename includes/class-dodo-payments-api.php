@@ -12,6 +12,8 @@ class Dodo_Payments_API
   }
 
   /**
+   * Creates a product
+   * 
    * @param WC_Product $product
    * @return array|WP_Error
    */
@@ -32,25 +34,30 @@ class Dodo_Payments_API
     return $this->post('/products', $body);
   }
 
+  /**
+   * Syncs the image for a product
+   * 
+   * @param WC_Product $product
+   * @param string $dodo_product_id
+   * @throws \Exception
+   * @return void
+   */
   public function upload_image_for_product($product, $dodo_product_id)
   {
     $image_id = $product->get_image_id();
 
     if (!$image_id) {
-      error_log('Product has no image');
-      return;
+      throw new Exception('Product has no image');
     }
 
     $image_path = get_attached_file($image_id);
     if (!$image_path) {
-      error_log('Could not find image file');
-      return;
+      throw new Exception('Could not find image file');
     }
 
     $image_contents = file_get_contents($image_path);
     if ($image_contents === false) {
-      error_log('Could not read image file');
-      return;
+      throw new Exception('Could not read image file');
     }
 
     ['url' => $upload_url, 'image_id' => $image_id] = $this->get_upload_url_and_image_id($dodo_product_id);
@@ -60,13 +67,11 @@ class Dodo_Payments_API
     ));
 
     if (is_wp_error($response)) {
-      error_log('Failed to upload image: ' . $response->get_error_message());
-      return;
+      throw new Exception('Failed to upload image: ' . $response->get_error_message());
     }
 
     if (wp_remote_retrieve_response_code($response) !== 200) {
-      error_log('Failed to upload image: ' . wp_remote_retrieve_body($response));
-      return;
+      throw new Exception('Failed to upload image: ' . wp_remote_retrieve_body($response));
     }
 
     $this->set_product_image_id($dodo_product_id, $image_id);
@@ -75,9 +80,11 @@ class Dodo_Payments_API
   }
 
   /**
-   * Summary of get_upload_url_and_image_id
+   * Gets the upload url and image id for a product
+   * 
    * @param string $dodo_product_id
    * @return array{url: string, image_id: string}
+   * @throws \Exception
    */
   private function get_upload_url_and_image_id($dodo_product_id)
   {
@@ -92,14 +99,22 @@ class Dodo_Payments_API
     );
 
     if (is_wp_error($res))
-      error_log($res->getMessage());
+      throw new Exception("Failed to get upload url and image id for product ($dodo_product_id): " . $res->get_error_message());
 
     if ($res['response']['code'] !== 200)
-      error_log($res['body']);
+      throw new Exception("Failed to get upload url and image id for product ($dodo_product_id): " . $res['body']);
 
     return json_decode($res['body'], true);
   }
 
+  /**
+   * Sets an image id to a product
+   * 
+   * @param string $dodo_product_id
+   * @param string $image_id
+   * @return void
+   * @throws \Exception
+   */
   private function set_product_image_id($dodo_product_id, $image_id)
   {
     $res = wp_remote_request(
@@ -115,22 +130,25 @@ class Dodo_Payments_API
     );
 
     if (is_wp_error($res))
-      error_log($res->getMessage());
+      throw new Exception("Failed to assign image ($image_id) to product ($dodo_product_id): " . $res->get_error_message());
 
     if ($res['response']['code'] !== 200)
-      error_log($res['body']);
+      throw new Exception("Failed to assign image ($image_id) to product ($dodo_product_id): " . $res['body']);
 
-    return $res;
+    return;
   }
 
   public function get_product($dodo_product_id)
   {
-    $url = $this->get_base_url() . '/products/' . $dodo_product_id;
+    $res = $this->get("/products/{$dodo_product_id}");
 
-    $res = wp_remote_get($url);
+    if (is_wp_error($res)) {
+      error_log("Failed to get product ($dodo_product_id): " . $res->get_error_message());
+      return false;
+    }
 
-    if (is_wp_error($res) || $res['response']['code'] === 404) {
-      return null;
+    if (wp_remote_retrieve_response_code($res) === 404) {
+      return false;
     }
 
     return json_decode($res['body']);
@@ -148,6 +166,19 @@ class Dodo_Payments_API
         'body' => json_encode($body),
       )
     );
+  }
+
+  private function get($path)
+  {
+    return wp_remote_post(
+      $this->get_base_url() . $path,
+      array(
+        'headers' => array(
+          'Authorization' => 'Bearer ' . $this->api_key,
+        ),
+      )
+    );
+
   }
 
   public function get_base_url()
