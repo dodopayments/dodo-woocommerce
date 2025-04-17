@@ -256,6 +256,7 @@ class Dodo_Payments_API
     }
 
     if (wp_remote_retrieve_response_code($res) === 404) {
+      error_log("Product ($dodo_product_id) not found: " . $res['body']);
       return false;
     }
 
@@ -278,7 +279,7 @@ class Dodo_Payments_API
 
   private function get($path)
   {
-    return wp_remote_post(
+    return wp_remote_get(
       $this->get_base_url() . $path,
       array(
         'headers' => array(
