@@ -11,6 +11,9 @@
  * Text Domain: dodo-payments
  * Domain Path: /languages
  * 
+ * License:           GPL v2 or later
+ * License URI:       https://www.gnu.org/licenses/gpl-2.0.html 
+ * 
  * Requires at least: 6.1
  * Tested up to: 6.1
  * Requires PHP: 7.4
