@@ -61,6 +61,8 @@ function dodo_payments_init()
       private string $api_key;
       private string $webhook_key;
 
+      protected Dodo_Payments_API $dodo_payments_api;
+
       private string $global_tax_category;
       private bool $global_tax_inclusive;
 
@@ -88,12 +90,24 @@ function dodo_payments_init()
         $this->init_form_fields();
         $this->init_settings();
 
+        $this->init_dodo_payments_api();
+
         add_action('woocommerce_update_options_payment_gateways_' . $this->id, array($this, 'process_admin_options'));
 
         add_action('woocommerce_thankyou_' . $this->id, array($this, 'thank_you_page'));
 
         // webhook to http://localhost:8080/wc-api/dodo_payments
         add_action('woocommerce_api_' . $this->id, array($this, 'webhook'));
+      }
+
+      private function init_dodo_payments_api()
+      {
+        $this->dodo_payments_api = new Dodo_Payments_API(array(
+          'testmode' => $this->testmode,
+          'api_key' => $this->api_key,
+          'global_tax_category' => $this->global_tax_category,
+          'global_tax_inclusive' => $this->global_tax_inclusive,
+        ));
       }
 
       /**
@@ -227,65 +241,30 @@ function dodo_payments_init()
 
       public function do_payment($order)
       {
-        $synced_products = $this->sync_products($order);
+        try {
+          $synced_products = $this->sync_products($order);
+          $payment = $this->dodo_payments_api->create_payment($order, $synced_products, $this->get_return_url($order));
+        } catch (Exception $e) {
+          $order->add_order_note(__($e->getMessage(), 'dodo-payments'));
 
-        $request = array(
-          'billing' => array(
-            'city' => $order->get_billing_city(),
-            'country' => $order->get_billing_country(),
-            'state' => $order->get_billing_state(),
-            'street' => $order->get_billing_address_1() . ' ' . $order->get_billing_address_2(),
-            'zipcode' => $order->get_billing_postcode(),
-          ),
-          'customer' => array(
-            'email' => $order->get_billing_email(),
-            'name' => $order->get_billing_first_name() . ' ' . $order->get_billing_last_name(),
-          ),
-          'product_cart' => $synced_products,
-          'payment_link' => true,
-          'return_url' => $this->get_return_url($order),
-        );
-
-        $response = wp_remote_post(
-          $this->get_base_url() . '/payments',
-          array(
-            'headers' => array(
-              'Authorization' => 'Bearer ' . $this->api_key,
-              'Content-Type' => 'application/json',
-            ),
-            'body' => json_encode($request),
-          )
-        );
-
-        if (is_wp_error($response)) {
-          $order->add_order_note(
-            sprintf(
-              __('Failed to create payment in Dodo Payments: %s', 'dodo-payments'),
-              $response->get_error_message()
-            )
-          );
           return array('result' => 'failure');
         }
 
-        $response_body = json_decode(wp_remote_retrieve_body($response), true);
-
-        if (isset($response_body['payment_link'])) {
+        if (isset($payment['payment_link']) && isset($payment['payment_id'])) {
           // Save the payment mapping
-          if (isset($response_body['payment_id'])) {
-            Dodo_Payments_Payment_DB::save_mapping($order->get_id(), $response_body['payment_id']);
+          Dodo_Payments_Payment_DB::save_mapping($order->get_id(), $payment['payment_id']);
 
-            $order->add_order_note(
-              sprintf(
-                // translators: %1$s: Payment ID
-                __('Payment created in Dodo Payments: %1$s', 'dodo-payments'),
-                $response_body['payment_id']
-              )
-            );
-          }
+          $order->add_order_note(
+            sprintf(
+              // translators: %1$s: Payment ID
+              __('Payment created in Dodo Payments: %1$s', 'dodo-payments'),
+              $payment['payment_id']
+            )
+          );
 
           return array(
             'result' => 'success',
-            'redirect' => $response_body['payment_link']
+            'redirect' => $payment['payment_link']
           );
         } else {
           $order->add_order_note(
@@ -299,7 +278,9 @@ function dodo_payments_init()
        * Syncs products from WooCommerce to Dodo Payments
        * 
        * @param \WC_Order $order
-       * @return array<array|array{amount: mixed, product_id: string, quantity: mixed}>
+       * @return array{amount: mixed, product_id: string, quantity: mixed}[]
+       * 
+       * @since 0.1.0
        */
       private function sync_products($order)
       {
@@ -310,23 +291,16 @@ function dodo_payments_init()
           $product = $item->get_product();
           $local_product_id = $product->get_id();
 
-          $dodo_api = new Dodo_Payments_API(array(
-            'testmode' => $this->testmode,
-            'api_key' => $this->api_key,
-            'global_tax_category' => $this->global_tax_category,
-            'global_tax_inclusive' => $this->global_tax_inclusive,
-          ));
-
           // Check if product is already mapped
           $dodo_product_id = Dodo_Payments_DB::get_dodo_product_id($local_product_id);
           $dodo_product = null;
 
           if ($dodo_product_id) {
-            $dodo_product = $dodo_api->get_product($dodo_product_id);
+            $dodo_product = $this->dodo_payments_api->get_product($dodo_product_id);
 
             if (!!$dodo_product) {
               try {
-                $dodo_api->update_product($dodo_product['product_id'], $product);
+                $this->dodo_payments_api->update_product($dodo_product['product_id'], $product);
               } catch (Exception $e) {
                 $order->add_order_note(
                   sprintf(
@@ -342,7 +316,7 @@ function dodo_payments_init()
 
           if (!$dodo_product_id || !$dodo_product) {
             try {
-              $response_body = $dodo_api->create_product($product);
+              $response_body = $this->dodo_payments_api->create_product($product);
             } catch (Exception $e) {
               $order->add_order_note(
                 sprintf(
@@ -360,7 +334,7 @@ function dodo_payments_init()
 
             // sync image to dodo payments
             try {
-              $dodo_api->sync_image_for_product($product, $dodo_product_id);
+              $this->dodo_payments_api->sync_image_for_product($product, $dodo_product_id);
             } catch (Exception $e) {
               $order->add_order_note(
                 sprintf(
@@ -490,7 +464,7 @@ function dodo_payments_init()
           $order = wc_get_order($order_id);
 
           if (!$order) {
-            error_log("Could not find order: " . $order_id);
+            error_log('Could not find order: ' . $order_id);
 
             // Silently consume the webhook event
             status_header(200);

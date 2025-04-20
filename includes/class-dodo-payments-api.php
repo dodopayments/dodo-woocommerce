@@ -154,6 +154,47 @@ class Dodo_Payments_API
   }
 
   /**
+   * Creates a payment in the Dodo Payments API
+   * 
+   * @param WC_Order $order
+   * @param array{amount: mixed, product_id: string, quantity: mixed}[] $synced_products
+   * @param string $return_url The URL to redirect to after the payment is completed
+   * @throws \Exception
+   * @return array{payment_id: string, payment_link: string}
+   */
+  public function create_payment($order, $synced_products, $return_url)
+  {
+    $request = array(
+      'billing' => array(
+        'city' => $order->get_billing_city(),
+        'country' => $order->get_billing_country(),
+        'state' => $order->get_billing_state(),
+        'street' => $order->get_billing_address_1() . ' ' . $order->get_billing_address_2(),
+        'zipcode' => $order->get_billing_postcode(),
+      ),
+      'customer' => array(
+        'email' => $order->get_billing_email(),
+        'name' => $order->get_billing_first_name() . ' ' . $order->get_billing_last_name(),
+      ),
+      'product_cart' => $synced_products,
+      'payment_link' => true,
+      'return_url' => $return_url,
+    );
+
+    $res = $this->post('/payments', $request);
+
+    if (is_wp_error($res)) {
+      throw new Exception("Failed to create payment: " . $res->get_error_message());
+    }
+
+    if (wp_remote_retrieve_response_code($res) !== 200) {
+      throw new Exception("Failed to create payment: " . $res['body']);
+    }
+
+    return json_decode($res['body'], true);
+  }
+
+  /**
    * Gets the upload url and image id for a product
    * 
    * @param string $dodo_product_id
