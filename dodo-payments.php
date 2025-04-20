@@ -15,8 +15,8 @@
  * License URI:       https://www.gnu.org/licenses/gpl-2.0.html 
  * 
  * Requires at least: 6.1
- * Tested up to: 6.1
  * Requires PHP: 7.4
+ * Tested up to: 6.1
  * WC requires at least: 7.9
  * WC tested up to: 9.6 
  */
@@ -57,18 +57,18 @@ function dodo_payments_init()
     {
       public null|string $instructions;
 
-      public bool $testmode;
-      public string $api_key;
-      public string $webhook_key;
+      private bool $testmode;
+      private string $api_key;
+      private string $webhook_key;
 
-      public string $global_tax_category;
-      public bool $global_tax_inclusive;
+      private string $global_tax_category;
+      private bool $global_tax_inclusive;
 
       public function __construct()
       {
         $this->id = 'dodo_payments';
         $this->icon = 'https://framerusercontent.com/images/PRLIEke3MNmMB0UurlKMzNTi8qk.png';
-        $this->has_fields = false; // todo: change to true later
+        $this->has_fields = false;
 
         $this->method_title = __('Dodo Payments', 'dodo-payments');
         $this->method_description = __('Accept payments via Dodo Payments.', 'dodo-payments');
@@ -80,7 +80,7 @@ function dodo_payments_init()
 
         $this->testmode = 'yes' === $this->get_option('testmode');
         $this->api_key = $this->testmode ? $this->get_option('test_api_key') : $this->get_option('live_api_key');
-        $this->webhook_key = $this->get_option('webhook_key');
+        $this->webhook_key = $this->testmode ? $this->get_option('test_webhook_key') : $this->get_option('live_webhook_key');
 
         $this->global_tax_category = $this->get_option('global_tax_category');
         $this->global_tax_inclusive = 'yes' === $this->get_option('global_tax_inclusive');
@@ -96,8 +96,20 @@ function dodo_payments_init()
         add_action('woocommerce_api_' . $this->id, array($this, 'webhook'));
       }
 
+      /**
+       * Initializes the form fields for Dodo Payments settings page
+       * 
+       * @return void
+       * 
+       * @since 0.1.0
+       */
       public function init_form_fields()
       {
+        $webhook_help_description = '<p>' .
+          __('Webhook endpoint for Dodo Payments. Use the below URL when generating a webhook signing key on Dodo Payments Dashboard.', 'dodo-payments')
+          . '</p><p><code>' . home_url("/wc-api/{$this->id}/") . '</code></p>';
+        ;
+
         $this->form_fields = array(
           'enabled' => array(
             'title' => __('Enable/Disable', 'dodo-payments'),
@@ -108,50 +120,57 @@ function dodo_payments_init()
           'title' => array(
             'title' => __('Title', 'dodo-payments'),
             'type' => 'text',
-            'default' => __('Dodo Payments Gateway', 'dodo-payments'),
-            'desc_tip' => true,
-            'description' => __('Custom title for Dodo Payments Gateway that the customer will see on the checkout page.', 'dodo-payments'),
+            'default' => __('Dodo Payments', 'dodo-payments'),
+            'desc_tip' => false,
+            'description' => __('Title for our payment method that the user will see on the checkout page.', 'dodo-payments'),
           ),
           'description' => array(
             'title' => __('Description', 'dodo-payments'),
             'type' => 'textarea',
             'default' => __('Pay via Dodo Payments', 'dodo-payments'),
-            'desc_tip' => true,
-            'description' => __('Custom description for Dodo Payments Gateway that the customer will see on the checkout page.', 'dodo-payments'),
+            'desc_tip' => false,
+            'description' => __('Description for our payment method that the user will see on the checkout page.', 'dodo-payments'),
           ),
           'instructions' => array(
             'title' => __('Instructions', 'dodo-payments'),
             'type' => 'textarea',
-            'default' => __('Default Instructions', 'dodo-payments'),
-            'desc_tip' => true,
+            'default' => __('', 'dodo-payments'),
+            'desc_tip' => false,
             'description' => __('Instructions that will be added to the thank you page and emails.', 'dodo-payments'),
           ),
           'testmode' => array(
             'title' => __('Test Mode', 'dodo-payments'),
             'type' => 'checkbox',
-            'label' => __('Enable Test Mode', 'dodo-payments'),
-            'default' => 'yes'
-          ),
-          'test_api_key' => array(
-            'title' => __('Test API Key', 'dodo-payments'),
-            'type' => 'text',
-            'default' => '',
-            'desc_tip' => true,
-            'description' => __('Enter your Test API Key here.', 'dodo-payments'),
+            'label' => __('Enable Test Mode, <b>No actual payments will be made, always remember to disable this when you are ready to go live</b>', 'dodo-payments'),
+            'default' => 'no'
           ),
           'live_api_key' => array(
             'title' => __('Live API Key', 'dodo-payments'),
             'type' => 'text',
             'default' => '',
-            'desc_tip' => true,
-            'description' => __('Enter your Live API Key here.', 'dodo-payments'),
+            'desc_tip' => false,
+            'description' => __('Your Live API Key. Required to receive payments. Generate one from <b>Dodo Payments (Live Mode) &gt; Developer &gt; API Keys</b>', 'dodo-payments'),
           ),
-          'webhook_key' => array(
-            'title' => __('Webhook Key', 'dodo-payments'),
+          'live_webhook_key' => array(
+            'title' => __('Live Webhook Signing Key', 'dodo-payments'),
             'type' => 'text',
             'default' => '',
-            'desc_tip' => true,
-            'description' => __('Enter your Webhook Key here.', 'dodo-payments'),
+            'desc_tip' => false,
+            'description' => __('Your Live Webhook Signing Key. Required to sync status for payments, recommended for setup. Generate one from <b>Dodo Payments (Live Mode) &gt; Developer &gt; Webhooks</b>, use the URL at the bottom of this page as the webhook URL.', 'dodo-payments'),
+          ),
+          'test_api_key' => array(
+            'title' => __('Test API Key', 'dodo-payments'),
+            'type' => 'text',
+            'default' => '',
+            'desc_tip' => false,
+            'description' => __('Your Test API Key. Optional, only required if you want to receive test payments. Generate one from <b>Dodo Payments (Test Mode) &gt; Developer &gt; API Keys</b>', 'dodo-payments'),
+          ),
+          'test_webhook_key' => array(
+            'title' => __('Test Webhook Signing Key', 'dodo-payments'),
+            'type' => 'text',
+            'default' => '',
+            'desc_tip' => false,
+            'description' => __('Your Test Webhook Signing Key. Optional, only required if you want to receive test payments. Generate one from <b>Dodo Payments (Test Mode) &gt; Developer &gt; Webhooks</b>, use the URL at the bottom of this page as the webhook URL.', 'dodo-payments'),
           ),
           'global_tax_category' => array(
             'title' => __('Global Tax Category', 'dodo-payments'),
@@ -163,16 +182,21 @@ function dodo_payments_init()
               'edtech' => __('EdTech', 'dodo-payments'),
             ),
             'default' => 'digital_products',
-            'desc_tip' => true,
+            'desc_tip' => false,
             'description' => __('Select the tax category for all products. You can override this on a per-product basis on Dodo Payments Dashboard.', 'dodo-payments'),
           ),
           'global_tax_inclusive' => array(
-            'title' => __('All Prices Tax Inclusive', 'dodo-payments'),
+            'title' => __('All Prices are Tax Inclusive', 'dodo-payments'),
             'type' => 'checkbox',
             'default' => 'no',
-            'desc_tip' => true,
+            'desc_tip' => false,
             'description' => __('Select if tax is included on all product prices. You can override this on a per-product basis on Dodo Payments Dashboard.', 'dodo-payments'),
           ),
+          'webhook_endpoint' => array(
+            'title' => __('Webhook Endpoint', 'dodo-payments'),
+            'type' => 'title',
+            'description' => $webhook_help_description,
+          )
         );
       }
 
@@ -180,7 +204,7 @@ function dodo_payments_init()
       {
         $order = wc_get_order($order_id);
 
-        $order->update_status('pending-payment', __('Awaiting Dodo Payments payment', 'dodo-payments'));
+        $order->update_status('pending-payment', __('Awaiting payment via Dodo Payments', 'dodo-payments'));
 
         wc_reduce_stock_levels($order_id);
 
@@ -203,7 +227,7 @@ function dodo_payments_init()
 
       public function do_payment($order)
       {
-        $mapped_products = $this->sync_products($order);
+        $synced_products = $this->sync_products($order);
 
         $request = array(
           'billing' => array(
@@ -217,7 +241,7 @@ function dodo_payments_init()
             'email' => $order->get_billing_email(),
             'name' => $order->get_billing_first_name() . ' ' . $order->get_billing_last_name(),
           ),
-          'product_cart' => $mapped_products,
+          'product_cart' => $synced_products,
           'payment_link' => true,
           'return_url' => $this->get_return_url($order),
         );
@@ -251,8 +275,11 @@ function dodo_payments_init()
             Dodo_Payments_Payment_DB::save_mapping($order->get_id(), $response_body['payment_id']);
 
             $order->add_order_note(
-              __('Payment created in Dodo Payments: %s', 'dodo-payments'),
-              $response_body['payment_id']
+              sprintf(
+                // translators: %1$s: Payment ID
+                __('Payment created in Dodo Payments: %1$s', 'dodo-payments'),
+                $response_body['payment_id']
+              )
             );
           }
 
@@ -373,7 +400,7 @@ function dodo_payments_init()
         try {
           $webhook = new StandardWebhook($this->webhook_key);
         } catch (\Exception $e) {
-          error_log("Invalid webhook key: " . $e->getMessage());
+          error_log('Invalid webhook key: ' . $e->getMessage());
 
           // Silently consume the webhook event
           status_header(200);
@@ -383,7 +410,7 @@ function dodo_payments_init()
         try {
           $payload = $webhook->verify($body, $headers);
         } catch (Exception $e) {
-          error_log("Could not verify webhook event: " . $e->getMessage());
+          error_log('Could not verify webhook event: ' . $e->getMessage());
 
           // Silently consume the webhook event
           status_header(200);
@@ -406,7 +433,7 @@ function dodo_payments_init()
           $order_id = Dodo_Payments_Payment_DB::get_order_id($payment_id);
 
           if (!$order_id) {
-            error_log("Could not find order_id for payment: " . $payment_id);
+            error_log('Could not find order_id for payment: ' . $payment_id);
 
             // Silently consume the webhook event
             status_header(200);
@@ -416,7 +443,7 @@ function dodo_payments_init()
           $order = wc_get_order($order_id);
 
           if (!$order) {
-            error_log("Could not find order: " . $order_id);
+            error_log('Could not find order: ' . $order_id);
 
             // Silently consume the webhook event
             status_header(200);
@@ -453,7 +480,7 @@ function dodo_payments_init()
           $order_id = Dodo_Payments_Payment_DB::get_order_id($payment_id);
 
           if (!$order_id) {
-            error_log("Could not find order for payment: " . $payment_id);
+            error_log('Could not find order for payment: ' . $payment_id);
 
             // Silently consume the webhook event
             status_header(200);
@@ -475,17 +502,23 @@ function dodo_payments_init()
               $order->update_status('refunded', __('Payment refunded by Dodo Payments', 'dodo-payments'));
 
               $order->add_order_note(
-                __('Refunded payment in Dodo Payments. Payment ID: %s, Refund ID: %s', 'dodo-payments'),
-                $payment_id,
-                $payload['data']['refund_id']
+                sprintf(
+                  // translators: %1$s: Payment ID, %2$s: Refund ID
+                  __('Refunded payment in Dodo Payments. Payment ID: %$1s, Refund ID: %2$s', 'dodo-payments'),
+                  $payment_id,
+                  $payload['data']['refund_id']
+                )
               );
               break;
 
             case 'refund.failed':
               $order->add_order_note(
-                __('Refund failed in Dodo Payments. Payment ID: %s, Refund ID: %s', 'dodo-payments'),
-                $payment_id,
-                $payload['data']['refund_id']
+                sprintf(
+                  // translators: %1$s: Payment ID, %2$s: Refund ID
+                  __('Refund failed in Dodo Payments. Payment ID: %$1s, Refund ID: %2$s', 'dodo-payments'),
+                  $payment_id,
+                  $payload['data']['refund_id']
+                )
               );
               break;
           }
