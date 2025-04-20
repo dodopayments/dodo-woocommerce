@@ -1,0 +1,9 @@
+*** Dodo Payments for WooCommerce Changelog ***
+
+YYYY-MM-DD - version 0.1.1
+* Improved hints for plugin settings
+* Separate live and testing webhook signing key fields, users will need to set 
+  those fields again.  
+
+YYYY-MM-DD - version 0.1.0
+* Initial beta release
