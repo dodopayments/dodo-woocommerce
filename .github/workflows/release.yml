@@ -1,0 +1,38 @@
+name: Create Release and Upload Asset
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    name: Create Release and Zip Asset
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create zip archive
+        run: zip -r dodo-payments-for-woocommerce-${{ github.ref_name }}.zip . -x ".git/*" ".github/*"
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref_name }}
+          release_name: Dodo Payments for WooCommerce ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }} # Get upload URL from the 'Create Release' step
+          asset_path: ./dodo-payments-for-woocommerce-${{ github.ref_name }}.zip
+          asset_name: dodo-payments-for-woocommerce-${{ github.ref_name }}.zip
+          asset_content_type: application/zip 
