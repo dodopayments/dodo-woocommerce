@@ -53,11 +53,11 @@ class Dodo_Payments_API
     $res = $this->post('/products', $body);
 
     if (is_wp_error($res)) {
-      throw new Exception("Failed to create product: " . $res->get_error_message());
+      throw new Exception("Failed to create product: " . esc_html($res->get_error_message()));
     }
 
     if (wp_remote_retrieve_response_code($res) !== 200) {
-      throw new Exception("Failed to create product: " . $res['body']);
+      throw new Exception("Failed to create product: " . esc_html($res['body']));
     }
 
     return json_decode($res['body'], true);
@@ -76,7 +76,7 @@ class Dodo_Payments_API
     $dodo_product = $this->get_product($dodo_product_id);
 
     if (!$dodo_product) {
-      throw new Exception("Product ($dodo_product_id) not found");
+      throw new Exception('Product (' . esc_html($dodo_product_id) . ') not found');
     }
 
     // ignore global options, respect the tax_category and tax_inclusive set
@@ -98,11 +98,11 @@ class Dodo_Payments_API
     $res = $this->patch("/products/{$dodo_product_id}", $body);
 
     if (is_wp_error($res)) {
-      throw new Exception("Failed to update product: " . $res->get_error_message());
+      throw new Exception("Failed to update product: " . esc_html($res->get_error_message()));
     }
 
     if (wp_remote_retrieve_response_code($res) !== 200) {
-      throw new Exception("Failed to update product: " . $res['body']);
+      throw new Exception("Failed to update product: " . esc_html($res['body']));
     }
 
     return;
@@ -141,11 +141,11 @@ class Dodo_Payments_API
     ));
 
     if (is_wp_error($response)) {
-      throw new Exception('Failed to upload image: ' . $response->get_error_message());
+      throw new Exception('Failed to upload image: ' . esc_html($response->get_error_message()));
     }
 
     if (wp_remote_retrieve_response_code($response) !== 200) {
-      throw new Exception('Failed to upload image: ' . wp_remote_retrieve_body($response));
+      throw new Exception('Failed to upload image: ' . esc_html($response['body']));
     }
 
     $this->set_product_image_id($dodo_product_id, $image_id);
@@ -184,11 +184,11 @@ class Dodo_Payments_API
     $res = $this->post('/payments', $request);
 
     if (is_wp_error($res)) {
-      throw new Exception("Failed to create payment: " . $res->get_error_message());
+      throw new Exception("Failed to create payment: " . esc_html($res->get_error_message()));
     }
 
     if (wp_remote_retrieve_response_code($res) !== 200) {
-      throw new Exception("Failed to create payment: " . $res['body']);
+      throw new Exception("Failed to create payment: " . esc_html($res['body']));
     }
 
     return json_decode($res['body'], true);
@@ -206,10 +206,14 @@ class Dodo_Payments_API
     $res = $this->put("/products/{$dodo_product_id}/images?force_update=true", null);
 
     if (is_wp_error($res))
-      throw new Exception("Failed to get upload url and image id for product ($dodo_product_id): " . $res->get_error_message());
+      throw new Exception('Failed to get upload url and image id for product ('
+        . esc_html($dodo_product_id) . '): '
+        . esc_html($res->get_error_message()));
 
     if ($res['response']['code'] !== 200)
-      throw new Exception("Failed to get upload url and image id for product ($dodo_product_id): " . $res['body']);
+      throw new Exception('Failed to get upload url and image id for product ('
+        . esc_html($dodo_product_id) . '): '
+        . esc_html($res['body']));
 
     return json_decode($res['body'], true);
   }
@@ -255,10 +259,14 @@ class Dodo_Payments_API
     $res = $this->patch("/products/{$dodo_product_id}", array('image_id' => $image_id));
 
     if (is_wp_error($res))
-      throw new Exception("Failed to assign image ($image_id) to product ($dodo_product_id): " . $res->get_error_message());
+      throw new Exception('Failed to assign image (' . esc_html($image_id)
+        . ') to product (' . esc_html($dodo_product_id)
+        . '): ' . esc_html($res->get_error_message()));
 
     if ($res['response']['code'] !== 200)
-      throw new Exception("Failed to assign image ($image_id) to product ($dodo_product_id): " . $res['body']);
+      throw new Exception('Failed to assign image (' . esc_html($image_id)
+        . ') to product (' . esc_html($dodo_product_id)
+        . '): ' . esc_html($res['body']));
 
     return;
   }
