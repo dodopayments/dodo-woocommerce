@@ -148,7 +148,7 @@ function dodo_payments_init()
           'instructions' => array(
             'title' => __('Instructions', 'dodo-woocommerce'),
             'type' => 'textarea',
-            'default' => __('', 'dodo-woocommerce'),
+            'default' => '',
             'desc_tip' => false,
             'description' => __('Instructions that will be added to the thank you page and emails.', 'dodo-woocommerce'),
           ),
@@ -245,7 +245,13 @@ function dodo_payments_init()
           $synced_products = $this->sync_products($order);
           $payment = $this->dodo_payments_api->create_payment($order, $synced_products, $this->get_return_url($order));
         } catch (Exception $e) {
-          $order->add_order_note(__($e->getMessage(), 'dodo-woocommerce'));
+          $order->add_order_note(
+            sprintf(
+              // translators: %1$s: Error message
+              __('Dodo Payments Error: %1$s', 'dodo-woocommerce'),
+              $e->getMessage()
+            )
+          );
 
           return array('result' => 'failure');
         }
@@ -304,11 +310,12 @@ function dodo_payments_init()
               } catch (Exception $e) {
                 $order->add_order_note(
                   sprintf(
-                    __('Failed to update product in Dodo Payments: %s', 'dodo-woocommerce'),
+                    // translators: %1$s: Error message
+                    __('Failed to update product in Dodo Payments: %1$s', 'dodo-woocommerce'),
                     $e->getMessage(),
                   )
                 );
-                error_log($e->getMessage());
+
                 continue;
               }
             }
@@ -320,11 +327,12 @@ function dodo_payments_init()
             } catch (Exception $e) {
               $order->add_order_note(
                 sprintf(
-                  __('Dodo Payments Error: %s', 'dodo-woocommerce'),
+                  // translators: %1$s: Error message
+                  __('Dodo Payments Error: %1$s', 'dodo-woocommerce'),
                   $e->getMessage(),
                 )
               );
-              error_log($e->getMessage());
+
               continue;
             }
 
@@ -338,11 +346,11 @@ function dodo_payments_init()
             } catch (Exception $e) {
               $order->add_order_note(
                 sprintf(
-                  __('Failed to sync image for product in Dodo Payments: %s', 'dodo-woocommerce'),
+                  // translators: %1$s: Error message
+                  __('Failed to sync image for product in Dodo Payments: %1$s', 'dodo-woocommerce'),
                   $e->getMessage(),
                 )
               );
-              error_log($e->getMessage());
             }
           }
 
