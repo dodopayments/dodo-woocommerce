@@ -7,8 +7,7 @@
  * Version: 0.1.4
  * Author: Dodo Payments
  * Developer: Dodo Payments
- * Text Domain: dodo-woocommerce
- * Domain Path: /languages
+ * Text Domain: dodo-payments-for-woocommerce
  * 
  * License:           GPL v3 or later
  * License URI:       https://www.gnu.org/licenses/gpl-3.0.html 
@@ -28,10 +27,10 @@ if (!in_array('woocommerce/woocommerce.php', apply_filters('active_plugins', get
 }
 
 // Include database classes
-require_once plugin_dir_path(__FILE__) . 'includes/class-dodo-woocommerce-db.php';
-require_once plugin_dir_path(__FILE__) . 'includes/class-dodo-woocommerce-payment-db.php';
+require_once plugin_dir_path(__FILE__) . 'includes/class-dodo-payments-for-woocommerce-db.php';
+require_once plugin_dir_path(__FILE__) . 'includes/class-dodo-payments-for-woocommerce-payment-db.php';
 require_once plugin_dir_path(__FILE__) . 'includes/class-standard-webhook.php';
-require_once plugin_dir_path(__FILE__) . 'includes/class-dodo-woocommerce-api.php';
+require_once plugin_dir_path(__FILE__) . 'includes/class-dodo-payments-for-woocommerce-api.php';
 
 // Create database tables on plugin activation
 register_activation_hook(__FILE__, function () {
@@ -70,8 +69,8 @@ function dodo_payments_init()
         $this->icon = 'https://framerusercontent.com/images/PRLIEke3MNmMB0UurlKMzNTi8qk.png';
         $this->has_fields = false;
 
-        $this->method_title = __('Dodo Payments', 'dodo-woocommerce');
-        $this->method_description = __('Accept payments via Dodo Payments.', 'dodo-woocommerce');
+        $this->method_title = __('Dodo Payments', 'dodo-payments-for-woocommerce');
+        $this->method_description = __('Accept payments via Dodo Payments.', 'dodo-payments-for-woocommerce');
 
         $this->enabled = $this->get_option('enabled');
         $this->title = $this->get_option('title');
@@ -118,94 +117,94 @@ function dodo_payments_init()
       public function init_form_fields()
       {
         $webhook_help_description = '<p>' .
-          __('Webhook endpoint for Dodo Payments. Use the below URL when generating a webhook signing key on Dodo Payments Dashboard.', 'dodo-woocommerce')
+          __('Webhook endpoint for Dodo Payments. Use the below URL when generating a webhook signing key on Dodo Payments Dashboard.', 'dodo-payments-for-woocommerce')
           . '</p><p><code>' . home_url("/wc-api/{$this->id}/") . '</code></p>';
         ;
 
         $this->form_fields = array(
           'enabled' => array(
-            'title' => __('Enable/Disable', 'dodo-woocommerce'),
+            'title' => __('Enable/Disable', 'dodo-payments-for-woocommerce'),
             'type' => 'checkbox',
-            'label' => __('Enable Dodo Payments', 'dodo-woocommerce'),
+            'label' => __('Enable Dodo Payments', 'dodo-payments-for-woocommerce'),
             'default' => 'no'
           ),
           'title' => array(
-            'title' => __('Title', 'dodo-woocommerce'),
+            'title' => __('Title', 'dodo-payments-for-woocommerce'),
             'type' => 'text',
-            'default' => __('Dodo Payments', 'dodo-woocommerce'),
+            'default' => __('Dodo Payments', 'dodo-payments-for-woocommerce'),
             'desc_tip' => false,
-            'description' => __('Title for our payment method that the user will see on the checkout page.', 'dodo-woocommerce'),
+            'description' => __('Title for our payment method that the user will see on the checkout page.', 'dodo-payments-for-woocommerce'),
           ),
           'description' => array(
-            'title' => __('Description', 'dodo-woocommerce'),
+            'title' => __('Description', 'dodo-payments-for-woocommerce'),
             'type' => 'textarea',
-            'default' => __('Pay via Dodo Payments', 'dodo-woocommerce'),
+            'default' => __('Pay via Dodo Payments', 'dodo-payments-for-woocommerce'),
             'desc_tip' => false,
-            'description' => __('Description for our payment method that the user will see on the checkout page.', 'dodo-woocommerce'),
+            'description' => __('Description for our payment method that the user will see on the checkout page.', 'dodo-payments-for-woocommerce'),
           ),
           'instructions' => array(
-            'title' => __('Instructions', 'dodo-woocommerce'),
+            'title' => __('Instructions', 'dodo-payments-for-woocommerce'),
             'type' => 'textarea',
             'default' => '',
             'desc_tip' => false,
-            'description' => __('Instructions that will be added to the thank you page and emails.', 'dodo-woocommerce'),
+            'description' => __('Instructions that will be added to the thank you page and emails.', 'dodo-payments-for-woocommerce'),
           ),
           'testmode' => array(
-            'title' => __('Test Mode', 'dodo-woocommerce'),
+            'title' => __('Test Mode', 'dodo-payments-for-woocommerce'),
             'type' => 'checkbox',
-            'label' => __('Enable Test Mode, <b>No actual payments will be made, always remember to disable this when you are ready to go live</b>', 'dodo-woocommerce'),
+            'label' => __('Enable Test Mode, <b>No actual payments will be made, always remember to disable this when you are ready to go live</b>', 'dodo-payments-for-woocommerce'),
             'default' => 'no'
           ),
           'live_api_key' => array(
-            'title' => __('Live API Key', 'dodo-woocommerce'),
+            'title' => __('Live API Key', 'dodo-payments-for-woocommerce'),
             'type' => 'text',
             'default' => '',
             'desc_tip' => false,
-            'description' => __('Your Live API Key. Required to receive payments. Generate one from <b>Dodo Payments (Live Mode) &gt; Developer &gt; API Keys</b>', 'dodo-woocommerce'),
+            'description' => __('Your Live API Key. Required to receive payments. Generate one from <b>Dodo Payments (Live Mode) &gt; Developer &gt; API Keys</b>', 'dodo-payments-for-woocommerce'),
           ),
           'live_webhook_key' => array(
-            'title' => __('Live Webhook Signing Key', 'dodo-woocommerce'),
+            'title' => __('Live Webhook Signing Key', 'dodo-payments-for-woocommerce'),
             'type' => 'text',
             'default' => '',
             'desc_tip' => false,
-            'description' => __('Your Live Webhook Signing Key. Required to sync status for payments, recommended for setup. Generate one from <b>Dodo Payments (Live Mode) &gt; Developer &gt; Webhooks</b>, use the URL at the bottom of this page as the webhook URL.', 'dodo-woocommerce'),
+            'description' => __('Your Live Webhook Signing Key. Required to sync status for payments, recommended for setup. Generate one from <b>Dodo Payments (Live Mode) &gt; Developer &gt; Webhooks</b>, use the URL at the bottom of this page as the webhook URL.', 'dodo-payments-for-woocommerce'),
           ),
           'test_api_key' => array(
-            'title' => __('Test API Key', 'dodo-woocommerce'),
+            'title' => __('Test API Key', 'dodo-payments-for-woocommerce'),
             'type' => 'text',
             'default' => '',
             'desc_tip' => false,
-            'description' => __('Your Test API Key. Optional, only required if you want to receive test payments. Generate one from <b>Dodo Payments (Test Mode) &gt; Developer &gt; API Keys</b>', 'dodo-woocommerce'),
+            'description' => __('Your Test API Key. Optional, only required if you want to receive test payments. Generate one from <b>Dodo Payments (Test Mode) &gt; Developer &gt; API Keys</b>', 'dodo-payments-for-woocommerce'),
           ),
           'test_webhook_key' => array(
-            'title' => __('Test Webhook Signing Key', 'dodo-woocommerce'),
+            'title' => __('Test Webhook Signing Key', 'dodo-payments-for-woocommerce'),
             'type' => 'text',
             'default' => '',
             'desc_tip' => false,
-            'description' => __('Your Test Webhook Signing Key. Optional, only required if you want to receive test payments. Generate one from <b>Dodo Payments (Test Mode) &gt; Developer &gt; Webhooks</b>, use the URL at the bottom of this page as the webhook URL.', 'dodo-woocommerce'),
+            'description' => __('Your Test Webhook Signing Key. Optional, only required if you want to receive test payments. Generate one from <b>Dodo Payments (Test Mode) &gt; Developer &gt; Webhooks</b>, use the URL at the bottom of this page as the webhook URL.', 'dodo-payments-for-woocommerce'),
           ),
           'global_tax_category' => array(
-            'title' => __('Global Tax Category', 'dodo-woocommerce'),
+            'title' => __('Global Tax Category', 'dodo-payments-for-woocommerce'),
             'type' => 'select',
             'options' => array(
-              'digital_products' => __('Digital Products', 'dodo-woocommerce'),
-              'saas' => __('SaaS', 'dodo-woocommerce'),
-              'e_book' => __('E-Book', 'dodo-woocommerce'),
-              'edtech' => __('EdTech', 'dodo-woocommerce'),
+              'digital_products' => __('Digital Products', 'dodo-payments-for-woocommerce'),
+              'saas' => __('SaaS', 'dodo-payments-for-woocommerce'),
+              'e_book' => __('E-Book', 'dodo-payments-for-woocommerce'),
+              'edtech' => __('EdTech', 'dodo-payments-for-woocommerce'),
             ),
             'default' => 'digital_products',
             'desc_tip' => false,
-            'description' => __('Select the tax category for all products. You can override this on a per-product basis on Dodo Payments Dashboard.', 'dodo-woocommerce'),
+            'description' => __('Select the tax category for all products. You can override this on a per-product basis on Dodo Payments Dashboard.', 'dodo-payments-for-woocommerce'),
           ),
           'global_tax_inclusive' => array(
-            'title' => __('All Prices are Tax Inclusive', 'dodo-woocommerce'),
+            'title' => __('All Prices are Tax Inclusive', 'dodo-payments-for-woocommerce'),
             'type' => 'checkbox',
             'default' => 'no',
             'desc_tip' => false,
-            'description' => __('Select if tax is included on all product prices. You can override this on a per-product basis on Dodo Payments Dashboard.', 'dodo-woocommerce'),
+            'description' => __('Select if tax is included on all product prices. You can override this on a per-product basis on Dodo Payments Dashboard.', 'dodo-payments-for-woocommerce'),
           ),
           'webhook_endpoint' => array(
-            'title' => __('Webhook Endpoint', 'dodo-woocommerce'),
+            'title' => __('Webhook Endpoint', 'dodo-payments-for-woocommerce'),
             'type' => 'title',
             'description' => $webhook_help_description,
           )
@@ -216,7 +215,7 @@ function dodo_payments_init()
       {
         $order = wc_get_order($order_id);
 
-        $order->update_status('pending-payment', __('Awaiting payment via Dodo Payments', 'dodo-woocommerce'));
+        $order->update_status('pending-payment', __('Awaiting payment via Dodo Payments', 'dodo-payments-for-woocommerce'));
 
         wc_reduce_stock_levels($order_id);
 
@@ -246,7 +245,7 @@ function dodo_payments_init()
           $order->add_order_note(
             sprintf(
               // translators: %1$s: Error message
-              __('Dodo Payments Error: %1$s', 'dodo-woocommerce'),
+              __('Dodo Payments Error: %1$s', 'dodo-payments-for-woocommerce'),
               $e->getMessage()
             )
           );
@@ -261,7 +260,7 @@ function dodo_payments_init()
           $order->add_order_note(
             sprintf(
               // translators: %1$s: Payment ID
-              __('Payment created in Dodo Payments: %1$s', 'dodo-woocommerce'),
+              __('Payment created in Dodo Payments: %1$s', 'dodo-payments-for-woocommerce'),
               $payment['payment_id']
             )
           );
@@ -272,7 +271,7 @@ function dodo_payments_init()
           );
         } else {
           $order->add_order_note(
-            __('Failed to create payment in Dodo Payments: Invalid response', 'dodo-woocommerce')
+            __('Failed to create payment in Dodo Payments: Invalid response', 'dodo-payments-for-woocommerce')
           );
           return array('result' => 'failure');
         }
@@ -309,7 +308,7 @@ function dodo_payments_init()
                 $order->add_order_note(
                   sprintf(
                     // translators: %1$s: Error message
-                    __('Failed to update product in Dodo Payments: %1$s', 'dodo-woocommerce'),
+                    __('Failed to update product in Dodo Payments: %1$s', 'dodo-payments-for-woocommerce'),
                     $e->getMessage(),
                   )
                 );
@@ -326,7 +325,7 @@ function dodo_payments_init()
               $order->add_order_note(
                 sprintf(
                   // translators: %1$s: Error message
-                  __('Dodo Payments Error: %1$s', 'dodo-woocommerce'),
+                  __('Dodo Payments Error: %1$s', 'dodo-payments-for-woocommerce'),
                   $e->getMessage(),
                 )
               );
@@ -345,7 +344,7 @@ function dodo_payments_init()
               $order->add_order_note(
                 sprintf(
                   // translators: %1$s: Error message
-                  __('Failed to sync image for product in Dodo Payments: %1$s', 'dodo-woocommerce'),
+                  __('Failed to sync image for product in Dodo Payments: %1$s', 'dodo-payments-for-woocommerce'),
                   $e->getMessage(),
                 )
               );
@@ -434,23 +433,23 @@ function dodo_payments_init()
 
           switch ($type) {
             case 'payment.succeeded':
-              $order->update_status('completed', __('Payment completed by Dodo Payments', 'dodo-woocommerce'));
+              $order->update_status('completed', __('Payment completed by Dodo Payments', 'dodo-payments-for-woocommerce'));
               break;
 
 
             case 'payment.failed':
-              $order->update_status('failed', __('Payment failed by Dodo Payments', 'dodo-woocommerce'));
+              $order->update_status('failed', __('Payment failed by Dodo Payments', 'dodo-payments-for-woocommerce'));
               wc_increase_stock_levels($order_id);
               break;
 
             case 'payment.cancelled':
-              $order->update_status('cancelled', __('Payment cancelled by Dodo Payments', 'dodo-woocommerce'));
+              $order->update_status('cancelled', __('Payment cancelled by Dodo Payments', 'dodo-payments-for-woocommerce'));
               wc_increase_stock_levels($order_id);
               break;
 
             case 'payment.processing':
             default:
-              $order->update_status('processing', __('Payment processing by Dodo Payments', 'dodo-woocommerce'));
+              $order->update_status('processing', __('Payment processing by Dodo Payments', 'dodo-payments-for-woocommerce'));
               break;
           }
         }
@@ -479,12 +478,12 @@ function dodo_payments_init()
 
           switch ($type) {
             case 'refund.succeeded':
-              $order->update_status('refunded', __('Payment refunded by Dodo Payments', 'dodo-woocommerce'));
+              $order->update_status('refunded', __('Payment refunded by Dodo Payments', 'dodo-payments-for-woocommerce'));
 
               $order->add_order_note(
                 sprintf(
                   // translators: %1$s: Payment ID, %2$s: Refund ID
-                  __('Refunded payment in Dodo Payments. Payment ID: %$1s, Refund ID: %2$s', 'dodo-woocommerce'),
+                  __('Refunded payment in Dodo Payments. Payment ID: %$1s, Refund ID: %2$s', 'dodo-payments-for-woocommerce'),
                   $payment_id,
                   $payload['data']['refund_id']
                 )
@@ -495,7 +494,7 @@ function dodo_payments_init()
               $order->add_order_note(
                 sprintf(
                   // translators: %1$s: Payment ID, %2$s: Refund ID
-                  __('Refund failed in Dodo Payments. Payment ID: %$1s, Refund ID: %2$s', 'dodo-woocommerce'),
+                  __('Refund failed in Dodo Payments. Payment ID: %$1s, Refund ID: %2$s', 'dodo-payments-for-woocommerce'),
                   $payment_id,
                   $payload['data']['refund_id']
                 )

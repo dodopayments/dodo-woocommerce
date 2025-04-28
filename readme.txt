@@ -13,7 +13,7 @@ Dodo Payments for WooCommerce allows you to accept payments through Dodo Payment
 
 == Installation ==
 
-1. Upload the plugin files to the `/wp-content/plugins/dodo-woocommerce` directory, or install the plugin through the WordPress plugins screen directly.
+1. Upload the plugin files to the `/wp-content/plugins/dodo-payments-for-woocommerce` directory, or install the plugin through the WordPress plugins screen directly.
 2. Activate the plugin through the 'Plugins' screen in WordPress
 3. Use the Settings->Dodo Payments screen to configure the plugin
 
