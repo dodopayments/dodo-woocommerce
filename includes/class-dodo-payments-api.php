@@ -310,12 +310,12 @@ class Dodo_Payments_API
     $res = $this->get("/products/{$dodo_product_id}");
 
     if (is_wp_error($res)) {
-      error_log("Failed to get product ($dodo_product_id): " . $res->get_error_message());
+      error_log("Dodo Payments: Failed to get product ($dodo_product_id): " . $res->get_error_message());
       return false;
     }
 
     if (wp_remote_retrieve_response_code($res) === 404) {
-      error_log("Product ($dodo_product_id) not found: " . $res['body']);
+      error_log("Dodo Payments: Product ($dodo_product_id) not found: " . $res['body']);
       return false;
     }
 
