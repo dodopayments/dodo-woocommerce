@@ -1,11 +1,10 @@
 <?php
 
-// TODO: Update the versions for 'tested up to' and 'WC requires at least'
 /**
  * Plugin Name: Dodo Payments for WooCommerce
  * Plugin URI: https://dodopayments.com
  * Description: Dodo Payments plugin for WooCommerce. Accept payments from your customers using Dodo Payments.
- * Version: 0.1.0
+ * Version: 0.1.3
  * Author: Dodo Payments
  * Developer: Dodo Payments
  * Text Domain: dodo-woocommerce
@@ -14,9 +13,8 @@
  * License:           GPL v3 or later
  * License URI:       https://www.gnu.org/licenses/gpl-3.0.html 
  * 
- * Requires at least: 6.1
  * Requires PHP: 7.4
- * Tested up to: 6.1
+ * Tested up to: 6.8
  * WC requires at least: 7.9
  * WC tested up to: 9.6 
  */
