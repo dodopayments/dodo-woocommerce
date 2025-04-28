@@ -1,0 +1,18 @@
+name: 'WordPress Plugin Check'
+on: # rebuild any PRs and main branch changes
+  pull_request:
+  push:
+    branches:
+    - main
+
+jobs:
+  plugin-check:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    - name: Run plugin check
+      uses: wordpress/plugin-check-action@v1
+      with:
+        slug: 'dodo-payments-for-woocommerce'

@@ -5,10 +5,6 @@
  * @package Dodo_Payments
  */
 
-if (!defined('ABSPATH')) {
-  exit; // Exit if accessed directly.
-}
-
 /**
  * Class Dodo_Payments_Payment_DB
  */
