@@ -4,7 +4,7 @@
  * Plugin Name: Dodo Payments for WooCommerce
  * Plugin URI: https://dodopayments.com
  * Description: Dodo Payments plugin for WooCommerce. Accept payments from your customers using Dodo Payments.
- * Version: 0.1.3
+ * Version: 0.1.4
  * Author: Dodo Payments
  * Developer: Dodo Payments
  * Text Domain: dodo-woocommerce
