@@ -379,7 +379,7 @@ function dodo_payments_init()
         try {
           $webhook = new StandardWebhook($this->webhook_key);
         } catch (\Exception $e) {
-          error_log('Invalid webhook key: ' . $e->getMessage());
+          error_log('Dodo Payments: Invalid webhook key: ' . $e->getMessage());
 
           // Silently consume the webhook event
           status_header(200);
@@ -389,7 +389,7 @@ function dodo_payments_init()
         try {
           $payload = $webhook->verify($body, $headers);
         } catch (Exception $e) {
-          error_log('Could not verify webhook event: ' . $e->getMessage());
+          error_log('Dodo Payments: Could not verify webhook event: ' . $e->getMessage());
 
           // Silently consume the webhook event
           status_header(200);
@@ -412,7 +412,7 @@ function dodo_payments_init()
           $order_id = Dodo_Payments_Payment_DB::get_order_id($payment_id);
 
           if (!$order_id) {
-            error_log('Could not find order_id for payment: ' . $payment_id);
+            error_log('Dodo Payments: Could not find order_id for payment: ' . $payment_id);
 
             // Silently consume the webhook event
             status_header(200);
@@ -422,7 +422,7 @@ function dodo_payments_init()
           $order = wc_get_order($order_id);
 
           if (!$order) {
-            error_log('Could not find order: ' . $order_id);
+            error_log('Dodo Payments: Could not find order: ' . $order_id);
 
             // Silently consume the webhook event
             status_header(200);
@@ -459,7 +459,7 @@ function dodo_payments_init()
           $order_id = Dodo_Payments_Payment_DB::get_order_id($payment_id);
 
           if (!$order_id) {
-            error_log('Could not find order for payment: ' . $payment_id);
+            error_log('Dodo Payments: Could not find order for payment: ' . $payment_id);
 
             // Silently consume the webhook event
             status_header(200);
@@ -469,7 +469,7 @@ function dodo_payments_init()
           $order = wc_get_order($order_id);
 
           if (!$order) {
-            error_log('Could not find order: ' . $order_id);
+            error_log('Dodo Payments: Could not find order: ' . $order_id);
 
             // Silently consume the webhook event
             status_header(200);
