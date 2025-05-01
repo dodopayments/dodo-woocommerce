@@ -36,9 +36,12 @@ class Dodo_Payments_API
    */
   public function create_product($product)
   {
+    $stripped_description = strip_tags($product->get_description());
+    $truncated_description = mb_substr($stripped_description, 0, max(1000, mb_strlen($stripped_description)));
+
     $body = array(
       'name' => $product->get_name(),
-      'description' => $product->get_description(),
+      'description' => $truncated_description,
       'price' => array(
         'type' => 'one_time_price',
         'currency' => get_woocommerce_currency(),
