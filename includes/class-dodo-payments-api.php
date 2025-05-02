@@ -82,11 +82,14 @@ class Dodo_Payments_API
       throw new Exception('Product (' . esc_html($dodo_product_id) . ') not found');
     }
 
+    $stripped_description = wp_strip_all_tags($product->get_description());
+    $truncated_description = mb_substr($stripped_description, 0, max(1000, mb_strlen($stripped_description)));
+
     // ignore global options, respect the tax_category and tax_inclusive set
     // from the dashboard
     $body = array(
       'name' => $product->get_name(),
-      'description' => $product->get_description(),
+      'description' => $truncated_description,
       'price' => array(
         'type' => 'one_time_price',
         'currency' => get_woocommerce_currency(),
