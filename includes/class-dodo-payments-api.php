@@ -37,7 +37,7 @@ class Dodo_Payments_API
   public function create_product($product)
   {
     $stripped_description = wp_strip_all_tags($product->get_description());
-    $truncated_description = mb_substr($stripped_description, 0, max(1000, mb_strlen($stripped_description)));
+    $truncated_description = mb_substr($stripped_description, 0, min(999, mb_strlen($stripped_description)));
 
     $body = array(
       'name' => $product->get_name(),
@@ -83,7 +83,7 @@ class Dodo_Payments_API
     }
 
     $stripped_description = wp_strip_all_tags($product->get_description());
-    $truncated_description = mb_substr($stripped_description, 0, max(1000, mb_strlen($stripped_description)));
+    $truncated_description = mb_substr($stripped_description, 0, min(999, mb_strlen($stripped_description)));
 
     // ignore global options, respect the tax_category and tax_inclusive set
     // from the dashboard
