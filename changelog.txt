@@ -1,9 +1,12 @@
 *** Dodo Payments for WooCommerce Changelog ***
 
-YYYY-MM-DD - version 0.1.1
+2025-05-04 - version 0.1.9
+* Fixed a bug where products with descriptions longer than 1000 characters would fail to process
+
+2025-04-28 - version 0.1.1
 * Improved hints for plugin settings
 * Separate live and testing webhook signing key fields, users will need to set 
   those fields again.  
 
-YYYY-MM-DD - version 0.1.0
+2025-04-27 - version 0.1.0
 * Initial beta release
