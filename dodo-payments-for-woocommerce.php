@@ -26,15 +26,14 @@ if (!in_array('woocommerce/woocommerce.php', apply_filters('active_plugins', get
   return;
 }
 
-require_once plugin_dir_path(__FILE__) . 'includes/class-dodo-payments-db.php';
+require_once plugin_dir_path(__FILE__) . 'includes/class-dodo-payments-product-db.php';
 require_once plugin_dir_path(__FILE__) . 'includes/class-dodo-payments-payment-db.php';
 require_once plugin_dir_path(__FILE__) . 'includes/class-dodo-payments-api.php';
-
 require_once plugin_dir_path(__FILE__) . 'includes/class-standard-webhook.php';
 
 // Create database tables on plugin activation
 register_activation_hook(__FILE__, function () {
-  Dodo_Payments_DB::create_table();
+  Dodo_Payments_Product_DB::create_table();
   Dodo_Payments_Payment_DB::create_table();
 });
 
@@ -295,7 +294,7 @@ function dodo_payments_init()
           $local_product_id = $product->get_id();
 
           // Check if product is already mapped
-          $dodo_product_id = Dodo_Payments_DB::get_dodo_product_id($local_product_id);
+          $dodo_product_id = Dodo_Payments_Product_DB::get_dodo_product_id($local_product_id);
           $dodo_product = null;
 
           if ($dodo_product_id) {
@@ -335,7 +334,7 @@ function dodo_payments_init()
 
             $dodo_product_id = $response_body['product_id'];
             // Save the mapping
-            Dodo_Payments_DB::save_mapping($local_product_id, $dodo_product_id);
+            Dodo_Payments_Product_DB::save_mapping($local_product_id, $dodo_product_id);
 
             // sync image to dodo payments
             try {

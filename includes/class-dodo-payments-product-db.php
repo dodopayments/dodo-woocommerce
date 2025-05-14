@@ -8,7 +8,7 @@
 /**
  * Class Dodo_Payments_DB
  */
-class Dodo_Payments_DB
+class Dodo_Payments_Product_DB
 {
   /**
    * Table name
