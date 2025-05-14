@@ -224,33 +224,6 @@ class Dodo_Payments_API
     return json_decode($res['body'], true);
   }
 
-  private function put($path, $body)
-  {
-    return wp_remote_request(
-      $this->get_base_url() . $path,
-      array(
-        'method' => 'PUT',
-        'headers' => array(
-          'Authorization' => 'Bearer ' . $this->api_key,
-        )
-      )
-    );
-  }
-
-  private function patch($path, $body)
-  {
-    return wp_remote_request(
-      $this->get_base_url() . $path,
-      array(
-        'method' => 'PATCH',
-        'headers' => array(
-          'Authorization' => 'Bearer ' . $this->api_key,
-          'Content-Type' => 'application/json',
-        ),
-        'body' => json_encode($body),
-      )
-    );
-  }
 
   /**
    * Sets an image id to a product
@@ -328,6 +301,18 @@ class Dodo_Payments_API
     return json_decode($res['body'], true);
   }
 
+  private function get($path)
+  {
+    return wp_remote_get(
+      $this->get_base_url() . $path,
+      array(
+        'headers' => array(
+          'Authorization' => 'Bearer ' . $this->api_key,
+        ),
+      )
+    );
+  }
+
   private function post($path, $body)
   {
     return wp_remote_post(
@@ -342,14 +327,32 @@ class Dodo_Payments_API
     );
   }
 
-  private function get($path)
+  private function put($path, $body)
   {
-    return wp_remote_get(
+    return wp_remote_request(
       $this->get_base_url() . $path,
       array(
+        'method' => 'PUT',
         'headers' => array(
           'Authorization' => 'Bearer ' . $this->api_key,
+          'Content-Type' => 'application/json',
         ),
+        'body' => json_encode($body)
+      )
+    );
+  }
+
+  private function patch($path, $body)
+  {
+    return wp_remote_request(
+      $this->get_base_url() . $path,
+      array(
+        'method' => 'PATCH',
+        'headers' => array(
+          'Authorization' => 'Bearer ' . $this->api_key,
+          'Content-Type' => 'application/json',
+        ),
+        'body' => json_encode($body),
       )
     );
   }
