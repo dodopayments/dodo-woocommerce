@@ -415,7 +415,7 @@ function dodo_payments_init()
 
         // TODO: support more discount types later on
         if ($coupon_type !== 'percent') {
-          throw new CartException(__('Dodo Payments: Only percentage discount codes are supported.', 'dodo-payments-for-woocommerce'));
+          throw new CartException('Dodo Payments: Only percentage discount codes are supported.');
         }
 
         $dodo_discount_id = Dodo_Payments_Coupon_DB::get_dodo_coupon_id($coupon->get_id());
