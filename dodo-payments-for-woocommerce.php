@@ -4,7 +4,7 @@
  * Plugin Name: Dodo Payments for WooCommerce
  * Plugin URI: https://dodopayments.com
  * Description: Dodo Payments plugin for WooCommerce. Accept payments from your customers using Dodo Payments.
- * Version: 0.1.9
+ * Version: 0.2.0
  * Author: Dodo Payments
  * Developer: Dodo Payments
  * Text Domain: dodo-payments-for-woocommerce
@@ -26,15 +26,18 @@ if (!in_array('woocommerce/woocommerce.php', apply_filters('active_plugins', get
   return;
 }
 
+// NOTE: Order of inclusion is important here. We want to include the DB classes before the API class.
 require_once plugin_dir_path(__FILE__) . 'includes/class-dodo-payments-product-db.php';
 require_once plugin_dir_path(__FILE__) . 'includes/class-dodo-payments-payment-db.php';
+require_once plugin_dir_path(__FILE__) . 'includes/class-dodo-payments-coupon-db.php';
+
 require_once plugin_dir_path(__FILE__) . 'includes/class-dodo-payments-api.php';
 require_once plugin_dir_path(__FILE__) . 'includes/class-standard-webhook.php';
-
 // Create database tables on plugin activation
 register_activation_hook(__FILE__, function () {
   Dodo_Payments_Product_DB::create_table();
   Dodo_Payments_Payment_DB::create_table();
+  Dodo_Payments_Coupon_DB::create_table();
 });
 
 // Make the plugin HPOS compatible
@@ -215,7 +218,6 @@ function dodo_payments_init()
         $order = wc_get_order($order_id);
 
         $order->update_status('pending-payment', __('Awaiting payment via Dodo Payments', 'dodo-payments-for-woocommerce'));
-
         wc_reduce_stock_levels($order_id);
 
         WC()->cart->empty_cart();
@@ -239,7 +241,43 @@ function dodo_payments_init()
       {
         try {
           $synced_products = $this->sync_products($order);
-          $payment = $this->dodo_payments_api->create_payment($order, $synced_products, $this->get_return_url($order));
+
+          /** @var string[] */
+          $coupons = $order->get_coupon_codes();
+          $dodo_discount_code = null;
+
+          if (count($coupons) > 1) {
+            $message = __('Dodo Payments: Multiple Coupon codes are not supported.', 'dodo-payments-for-woocommerce');
+            $order->add_order_note($message);
+            wc_add_notice($message, 'error');
+
+            return array('result' => 'failure');
+          }
+
+          if (count($coupons) == 1) {
+            $coupon_code = $coupons[0];
+
+            try {
+              $dodo_discount_code = $this->sync_coupon($coupon_code);
+            } catch (CartException $e) {
+              wc_add_notice($e->getMessage(), 'error');
+
+              return array('result' => 'failure');
+            } catch (Exception $e) {
+              $order->add_order_note(
+                sprintf(
+                  // translators: %1$s: Error message
+                  __('Dodo Payments Error: %1$s', 'dodo-payments-for-woocommerce'),
+                  $e->getMessage()
+                )
+              );
+              wc_add_notice(__('Dodo Payments: an unexpected error occured.', 'dodo-payments-for-woocommerce'), 'error');
+
+              return array('result' => 'failure');
+            }
+          }
+
+          $payment = $this->dodo_payments_api->create_payment($order, $synced_products, $dodo_discount_code, $this->get_return_url($order));
         } catch (Exception $e) {
           $order->add_order_note(
             sprintf(
@@ -358,6 +396,90 @@ function dodo_payments_init()
         }
 
         return $mapped_products;
+      }
+
+      /**
+       * Syncs a coupon from WooCommerce to Dodo Payments
+       * 
+       * @param string $coupon_code
+       * @return string Dodo Payments discount code
+       * @throws CartException If the coupon is not a percentage discount code
+       * @throws Exception If the coupon could not be synced
+       * 
+       * @since 0.2.0
+       */
+      private function sync_coupon($coupon_code)
+      {
+        $coupon = new WC_Coupon($coupon_code);
+        $coupon_type = $coupon->get_discount_type();
+
+        // TODO: support more discount types later on
+        if ($coupon_type !== 'percent') {
+          throw new CartException(__('Dodo Payments: Only percentage discount codes are supported.', 'dodo-payments-for-woocommerce'));
+        }
+
+        $dodo_discount_id = Dodo_Payments_Coupon_DB::get_dodo_coupon_id($coupon->get_id());
+        $dodo_discount = null;
+
+        $dodo_discount_code = null;
+
+        $dodo_discount_req_body = self::wc_coupon_to_dodo_discount_body($coupon);
+
+        if ($dodo_discount_id) {
+          $dodo_discount = $this->dodo_payments_api->get_discount_code($dodo_discount_id);
+
+          if (!!$dodo_discount) {
+            $dodo_discount = $this->dodo_payments_api->update_discount_code($dodo_discount_id, $dodo_discount_req_body);
+            $dodo_discount_code = $dodo_discount['code'];
+          }
+        }
+
+        if (!$dodo_discount_id || !$dodo_discount) {
+          // FIXME: This will not work if the discount code already exists with a different id
+          // need to find a way to get the id of the existing discount code
+          $dodo_discount = $this->dodo_payments_api->create_discount_code($dodo_discount_req_body);
+
+          $dodo_discount_id = $dodo_discount['discount_id'];
+          $dodo_discount_code = $dodo_discount['code'];
+
+          // Save the mapping
+          Dodo_Payments_Coupon_DB::save_mapping($coupon->get_id(), $dodo_discount_id);
+        }
+
+        return $dodo_discount_code;
+      }
+
+      private static function wc_coupon_to_dodo_discount_body($coupon)
+      {
+        $coupon_amount = (int) $coupon->get_amount() * 100;
+        /** @var int|null */
+        $usage_limit = $coupon->get_usage_limit() > 0 ? (int) $coupon->get_usage_limit() : null;
+
+        /** @var string[] */
+        $product_ids = $coupon->get_product_ids();
+
+        $dodo_product_ids = array();
+        foreach ($product_ids as $product_id) {
+          $dodo_product_id = Dodo_Payments_Product_DB::get_dodo_product_id($product_id);
+
+          if ($dodo_product_id) {
+            array_push($dodo_product_ids, $dodo_product_id);
+          }
+        }
+
+        /** @var string[]|null */
+        $restricted_to = count($dodo_product_ids) > 0 ? $dodo_product_ids : null;
+        /** @var string|null */
+        $expires_at = $coupon->get_date_expires() ? (string) $coupon->get_date_expires() : null;
+
+        return array(
+          'type' => 'percentage',
+          'code' => $coupon->get_code(),
+          'amount' => $coupon_amount,
+          'expires_at' => $expires_at,
+          'usage_limit' => $usage_limit,
+          'restricted_to' => $restricted_to,
+        );
       }
 
       private function get_base_url()
