@@ -164,11 +164,12 @@ class Dodo_Payments_API
    * 
    * @param WC_Order $order
    * @param array{amount: mixed, product_id: string, quantity: mixed}[] $synced_products
+   * @param string|null $dodo_discount_code Optional. The code of the discount code to apply to the payment.
    * @param string $return_url The URL to redirect to after the payment is completed
    * @throws \Exception
    * @return array{payment_id: string, payment_link: string}
    */
-  public function create_payment($order, $synced_products, $return_url)
+  public function create_payment($order, $synced_products, $dodo_discount_code, $return_url)
   {
     $request = array(
       'billing' => array(
@@ -183,6 +184,7 @@ class Dodo_Payments_API
         'name' => $order->get_billing_first_name() . ' ' . $order->get_billing_last_name(),
       ),
       'product_cart' => $synced_products,
+      'discount_code' => $dodo_discount_code,
       'payment_link' => true,
       'return_url' => $return_url,
     );
@@ -296,6 +298,140 @@ class Dodo_Payments_API
     if (wp_remote_retrieve_response_code($res) === 404) {
       error_log("Dodo Payments: Product ($dodo_product_id) not found: " . $res['body']);
       return false;
+    }
+
+    return json_decode($res['body'], true);
+  }
+
+  /**
+   * Get discount code info from the Dodo Payments API
+   * 
+   * @param string $dodo_discount_id
+   * @return array{
+   *    amount: int,
+   *    business_id: string,
+   *    code: string,
+   *    created_at: string,
+   *    discount_id: string,
+   *    expires_at: string,
+   *    name: string,
+   *    restricted_to: array<string>,
+   *    times_used: int,
+   *    type: string,
+   *    usage_limit: int
+   * }|false
+   */
+  public function get_discount_code($dodo_discount_id)
+  {
+    $res = $this->get("/discounts/{$dodo_discount_id}");
+
+    if (is_wp_error($res)) {
+      error_log("Dodo Payments: Failed to get discount code ($dodo_discount_id): " . $res->get_error_message());
+      return false;
+    }
+
+    if (wp_remote_retrieve_response_code($res) === 404) {
+      error_log("Dodo Payments: Discount code ($dodo_discount_id) not found: " . $res['body']);
+      return false;
+    }
+
+    return json_decode($res['body'], true);
+  }
+
+  /**
+   * Creates a discount code in the Dodo Payments API
+   * 
+   * @param array{
+   *    amount: int,
+   *    code: string,
+   *    expires_at: string,
+   *    name: string,
+   *    restricted_to: string[],
+   *    type: string,
+   *    usage_limit: int
+   * } $dodo_discount_body
+   * 
+   * @return array{
+   *    amount: int,
+   *    business_id: string,
+   *    code: string,
+   *    created_at: string,
+   *    discount_id: string,
+   *    expires_at: string,
+   *    name: string,
+   *    restricted_to: string[],
+   *    times_used: int,
+   *    type: string,
+   *    usage_limit: int
+   * }
+   * @throws \Exception
+   */
+  public function create_discount_code($dodo_discount_body)
+  {
+    $res = $this->post('/discounts', $dodo_discount_body);
+
+    if (is_wp_error($res)) {
+      throw new Exception(__(
+        'Failed to create discount code: ' . $res->get_error_message(),
+        'dodo-payments-for-woocommerce'
+      ));
+    }
+
+    if (wp_remote_retrieve_response_code($res) !== 200) {
+      throw new Exception(__(
+        'Failed to create discount code: ' . $res['body'],
+        'dodo-payments-for-woocommerce'
+      ));
+    }
+
+    return json_decode($res['body'], true);
+  }
+
+  /**
+   * Updates a discount code in the Dodo Payments API
+   * 
+   * @param string $dodo_discount_id
+   * @param array{
+   *    amount: int,
+   *    code: string,
+   *    expires_at: string,
+   *    name: string,
+   *    restricted_to: string[],
+   *    type: string,
+   *    usage_limit: int
+   * } $dodo_discount_body
+   * 
+   * @return array{
+   *    amount: int,
+   *    business_id: string,
+   *    code: string,
+   *    created_at: string,
+   *    discount_id: string,
+   *    expires_at: string,
+   *    name: string,
+   *    restricted_to: string[],
+   *    times_used: int,
+   *    type: string,
+   *    usage_limit: int
+   * }
+   * @throws \Exception
+   */
+  public function update_discount_code($dodo_discount_id, $dodo_discount_body)
+  {
+    $res = $this->patch("/discounts/{$dodo_discount_id}", $dodo_discount_body);
+
+    if (is_wp_error($res)) {
+      throw new Exception(__(
+        'Failed to update discount code: ' . $res->get_error_message(),
+        'dodo-payments-for-woocommerce'
+      ));
+    }
+
+    if (wp_remote_retrieve_response_code($res) !== 200) {
+      throw new Exception(__(
+        'Dodo Payments: Failed to update discount code: ' . $res['body'],
+        'dodo-payments-for-woocommerce'
+      ));
     }
 
     return json_decode($res['body'], true);
