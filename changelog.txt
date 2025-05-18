@@ -1,5 +1,8 @@
 *** Dodo Payments for WooCommerce Changelog ***
 
+2025-05-19 - version 0.2.0
+* Feature: Add support for coupon codes(Fixed percentage type only).
+
 2025-05-04 - version 0.1.9
 * Fixed a bug where products with descriptions longer than 1000 characters would fail to process
 
