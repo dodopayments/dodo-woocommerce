@@ -16,7 +16,6 @@ class Dodo_Payments_API
   private bool $global_tax_inclusive;
 
   /**
-   * Summary of __construct
    * @param array{testmode: bool, api_key: string, global_tax_category: string, global_tax_inclusive: bool} $options
    */
   public function __construct($options)
@@ -56,11 +55,11 @@ class Dodo_Payments_API
     $res = $this->post('/products', $body);
 
     if (is_wp_error($res)) {
-      throw new Exception("Failed to create product: " . esc_html($res->get_error_message()));
+      throw new Exception('Failed to create product: ' . esc_html($res->get_error_message()));
     }
 
     if (wp_remote_retrieve_response_code($res) !== 200) {
-      throw new Exception("Failed to create product: " . esc_html($res['body']));
+      throw new Exception('Failed to create product: ' . esc_html($res['body']));
     }
 
     return json_decode($res['body'], true);
@@ -371,17 +370,11 @@ class Dodo_Payments_API
     $res = $this->post('/discounts', $dodo_discount_body);
 
     if (is_wp_error($res)) {
-      throw new Exception(__(
-        'Failed to create discount code: ' . $res->get_error_message(),
-        'dodo-payments-for-woocommerce'
-      ));
+      throw new Exception('Failed to create discount code: ' . esc_html($res->get_error_message()), );
     }
 
     if (wp_remote_retrieve_response_code($res) !== 200) {
-      throw new Exception(__(
-        'Failed to create discount code: ' . $res['body'],
-        'dodo-payments-for-woocommerce'
-      ));
+      throw new Exception('Failed to create discount code: ' . esc_html($res['body']));
     }
 
     return json_decode($res['body'], true);
@@ -421,17 +414,11 @@ class Dodo_Payments_API
     $res = $this->patch("/discounts/{$dodo_discount_id}", $dodo_discount_body);
 
     if (is_wp_error($res)) {
-      throw new Exception(__(
-        'Failed to update discount code: ' . $res->get_error_message(),
-        'dodo-payments-for-woocommerce'
-      ));
+      throw new Exception('Failed to update discount code: ' . esc_html($res->get_error_message()));
     }
 
     if (wp_remote_retrieve_response_code($res) !== 200) {
-      throw new Exception(__(
-        'Dodo Payments: Failed to update discount code: ' . $res['body'],
-        'dodo-payments-for-woocommerce'
-      ));
+      throw new Exception('Dodo Payments: Failed to update discount code: ' . esc_html($res['body']));
     }
 
     return json_decode($res['body'], true);
