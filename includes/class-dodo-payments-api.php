@@ -44,7 +44,7 @@ class Dodo_Payments_API
       'price' => array(
         'type' => 'one_time_price',
         'currency' => get_woocommerce_currency(),
-        'price' => (int) $product->get_price() * 100, // fixme: assuming that the currency is INR or USD
+        'price' => (int) ($product->get_price() * 100), // fixme: assuming that the currency is INR or USD
         'discount' => 0, // todo: update defaults
         'purchasing_power_parity' => false, // todo: deal with it when the feature is implemented
         'tax_inclusive' => $this->global_tax_inclusive,
@@ -92,7 +92,7 @@ class Dodo_Payments_API
       'price' => array(
         'type' => 'one_time_price',
         'currency' => get_woocommerce_currency(),
-        'price' => (int) $product->get_price() * 100, // fixme: assuming that the currency is INR or USD
+        'price' => (int) ($product->get_price() * 100), // fixme: assuming that the currency is INR or USD
         'discount' => $dodo_product['price']['discount'],
         'purchasing_power_parity' => $dodo_product['price']['purchasing_power_parity'],
         'tax_inclusive' => $dodo_product['price']['tax_inclusive'],
