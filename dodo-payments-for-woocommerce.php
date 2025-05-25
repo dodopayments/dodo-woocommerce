@@ -23,7 +23,7 @@ if (!defined('ABSPATH')) {
     exit; // Exit if accessed directly.
 }
 
-if (!in_array('woocommerce/woocommerce.php', apply_filters('active_plugins', get_option('active_plugins'),))) {
+if (!in_array('woocommerce/woocommerce.php', apply_filters('active_plugins', get_option('active_plugins')))) {
     return;
 }
 
@@ -69,7 +69,7 @@ function dodo_payments_init()
             public function __construct()
             {
                 $this->id = 'dodo_payments';
-                $this->icon = 'https://framerusercontent.com/images/PRLIEke3MNmMB0UurlKMzNTi8qk.png';
+                $this->icon = plugins_url('/assets/logo.png', __FILE__);
                 $this->has_fields = false;
 
                 $this->method_title = __('Dodo Payments', 'dodo-payments-for-woocommerce');
