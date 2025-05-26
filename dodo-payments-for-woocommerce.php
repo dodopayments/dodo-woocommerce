@@ -491,12 +491,12 @@ function dodo_payments_init()
             public function webhook()
             {
                 $headers = [
-                    'webhook-signature' => $_SERVER['HTTP_WEBHOOK_SIGNATURE'],
-                    'webhook-id' => $_SERVER['HTTP_WEBHOOK_ID'],
-                    'webhook-timestamp' => $_SERVER['HTTP_WEBHOOK_TIMESTAMP'],
+                    'webhook-signature' => isset($_SERVER['HTTP_WEBHOOK_SIGNATURE']) ? sanitize_text_field($_SERVER['HTTP_WEBHOOK_SIGNATURE']) : '',
+                    'webhook-id' => isset($_SERVER['HTTP_WEBHOOK_ID']) ? sanitize_text_field($_SERVER['HTTP_WEBHOOK_ID']) : '',
+                    'webhook-timestamp' => isset($_SERVER['HTTP_WEBHOOK_TIMESTAMP']) ? sanitize_text_field($_SERVER['HTTP_WEBHOOK_TIMESTAMP']) : '',
                 ];
 
-                $body = file_get_contents('php://input');
+                $body = sanitize_text_field(file_get_contents('php://input'));
 
                 try {
                     $webhook = new DodoStandardWebhook($this->webhook_key);
