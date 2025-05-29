@@ -1,6 +1,6 @@
 <?php
 
-class DodoStandardWebhook
+class Dodo_Payments_Standard_Webhook
 {
   private const SECRET_PREFIX = "whsec_";
   private const TOLERANCE = 5 * 60;

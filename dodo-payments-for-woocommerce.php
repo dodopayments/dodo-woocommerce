@@ -260,7 +260,7 @@ function dodo_payments_init()
 
                         try {
                             $dodo_discount_code = $this->sync_coupon($coupon_code);
-                        } catch (CartException $e) {
+                        } catch (Dodo_Payments_Cart_Exception $e) {
                             wc_add_notice($e->getMessage(), 'error');
 
                             return array('result' => 'failure');
@@ -404,7 +404,7 @@ function dodo_payments_init()
              *
              * @param string $coupon_code
              * @return string Dodo Payments discount code
-             * @throws CartException If the coupon is not a percentage discount code
+             * @throws Dodo_Payments_Cart_Exception If the coupon is not a percentage discount code
              * @throws Exception If the coupon could not be synced
              *
              * @since 0.2.0
@@ -416,7 +416,7 @@ function dodo_payments_init()
 
                 // TODO: support more discount types later on
                 if ($coupon_type !== 'percent') {
-                    throw new CartException('Dodo Payments: Only percentage discount codes are supported.');
+                    throw new Dodo_Payments_Cart_Exception('Dodo Payments: Only percentage discount codes are supported.');
                 }
 
                 $dodo_discount_id = Dodo_Payments_Coupon_DB::get_dodo_coupon_id($coupon->get_id());
@@ -499,7 +499,7 @@ function dodo_payments_init()
                 $body = sanitize_text_field(file_get_contents('php://input'));
 
                 try {
-                    $webhook = new DodoStandardWebhook($this->webhook_key);
+                    $webhook = new Dodo_Payments_Standard_Webhook($this->webhook_key);
                 } catch (\Exception $e) {
                     error_log('Dodo Payments: Invalid webhook key: ' . $e->getMessage());
 
@@ -632,8 +632,8 @@ function dodo_payments_init()
     }
 }
 
-add_filter('woocommerce_payment_gateways', 'add_to_woo_dodo_payments_gateway_class');
-function add_to_woo_dodo_payments_gateway_class($gateways)
+add_filter('woocommerce_payment_gateways', 'dodo_payments_add_gateway_class_to_woo');
+function dodo_payments_add_gateway_class_to_woo($gateways)
 {
     $gateways[] = 'Dodo_Payments_WC_Gateway';
     return $gateways;
