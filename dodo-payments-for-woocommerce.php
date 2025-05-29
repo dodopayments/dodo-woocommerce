@@ -4,7 +4,7 @@
  * Plugin Name: Dodo Payments for WooCommerce
  * Plugin URI: https://dodopayments.com
  * Description: Dodo Payments plugin for WooCommerce. Accept payments from your customers using Dodo Payments.
- * Version: 0.2.2
+ * Version: 0.2.3
  * Author: Dodo Payments
  * Developer: Dodo Payments
  * Text Domain: dodo-payments-for-woocommerce
@@ -13,6 +13,7 @@
  * License URI:       https://www.gnu.org/licenses/gpl-3.0.html
  *
  * Requires PHP: 7.4
+ * Requires at least: 6.1
  * Requires Plugins: woocommerce
  * Tested up to: 6.8
  * WC requires at least: 7.9
@@ -23,7 +24,7 @@ if (!defined('ABSPATH')) {
     exit; // Exit if accessed directly.
 }
 
-if (!in_array('woocommerce/woocommerce.php', apply_filters('active_plugins', get_option('active_plugins'),))) {
+if (!in_array('woocommerce/woocommerce.php', apply_filters('active_plugins', get_option('active_plugins')))) {
     return;
 }
 
@@ -69,7 +70,7 @@ function dodo_payments_init()
             public function __construct()
             {
                 $this->id = 'dodo_payments';
-                $this->icon = 'https://framerusercontent.com/images/PRLIEke3MNmMB0UurlKMzNTi8qk.png';
+                $this->icon = plugins_url('/assets/logo.png', __FILE__);
                 $this->has_fields = false;
 
                 $this->method_title = __('Dodo Payments', 'dodo-payments-for-woocommerce');
@@ -260,7 +261,7 @@ function dodo_payments_init()
 
                         try {
                             $dodo_discount_code = $this->sync_coupon($coupon_code);
-                        } catch (CartException $e) {
+                        } catch (Dodo_Payments_Cart_Exception $e) {
                             wc_add_notice($e->getMessage(), 'error');
 
                             return array('result' => 'failure');
@@ -404,7 +405,7 @@ function dodo_payments_init()
              *
              * @param string $coupon_code
              * @return string Dodo Payments discount code
-             * @throws CartException If the coupon is not a percentage discount code
+             * @throws Dodo_Payments_Cart_Exception If the coupon is not a percentage discount code
              * @throws Exception If the coupon could not be synced
              *
              * @since 0.2.0
@@ -416,7 +417,7 @@ function dodo_payments_init()
 
                 // TODO: support more discount types later on
                 if ($coupon_type !== 'percent') {
-                    throw new CartException('Dodo Payments: Only percentage discount codes are supported.');
+                    throw new Dodo_Payments_Cart_Exception('Dodo Payments: Only percentage discount codes are supported.');
                 }
 
                 $dodo_discount_id = Dodo_Payments_Coupon_DB::get_dodo_coupon_id($coupon->get_id());
@@ -491,15 +492,15 @@ function dodo_payments_init()
             public function webhook()
             {
                 $headers = [
-                    'webhook-signature' => $_SERVER['HTTP_WEBHOOK_SIGNATURE'],
-                    'webhook-id' => $_SERVER['HTTP_WEBHOOK_ID'],
-                    'webhook-timestamp' => $_SERVER['HTTP_WEBHOOK_TIMESTAMP'],
+                    'webhook-signature' => isset($_SERVER['HTTP_WEBHOOK_SIGNATURE']) ? sanitize_text_field($_SERVER['HTTP_WEBHOOK_SIGNATURE']) : '',
+                    'webhook-id' => isset($_SERVER['HTTP_WEBHOOK_ID']) ? sanitize_text_field($_SERVER['HTTP_WEBHOOK_ID']) : '',
+                    'webhook-timestamp' => isset($_SERVER['HTTP_WEBHOOK_TIMESTAMP']) ? sanitize_text_field($_SERVER['HTTP_WEBHOOK_TIMESTAMP']) : '',
                 ];
 
-                $body = file_get_contents('php://input');
+                $body = sanitize_text_field(file_get_contents('php://input'));
 
                 try {
-                    $webhook = new DodoStandardWebhook($this->webhook_key);
+                    $webhook = new Dodo_Payments_Standard_Webhook($this->webhook_key);
                 } catch (\Exception $e) {
                     error_log('Dodo Payments: Invalid webhook key: ' . $e->getMessage());
 
@@ -632,8 +633,8 @@ function dodo_payments_init()
     }
 }
 
-add_filter('woocommerce_payment_gateways', 'add_to_woo_dodo_payments_gateway_class');
-function add_to_woo_dodo_payments_gateway_class($gateways)
+add_filter('woocommerce_payment_gateways', 'dodo_payments_add_gateway_class_to_woo');
+function dodo_payments_add_gateway_class_to_woo($gateways)
 {
     $gateways[] = 'Dodo_Payments_WC_Gateway';
     return $gateways;

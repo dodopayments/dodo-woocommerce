@@ -6,7 +6,7 @@
  * 
  * @since 0.2.0
  */
-class CartException extends Exception
+class Dodo_Payments_Cart_Exception extends Exception
 {
   public function __construct($message, $code = 0, Exception $previous = null)
   {
