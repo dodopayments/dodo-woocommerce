@@ -1,5 +1,5 @@
 === Dodo Payments for WooCommerce ===
-Contributors: dodo
+Contributors: ayushdodopayments
 Tags: payments, woocommerce, dodo
 Requires at least: 6.1
 Tested up to: 6.8
