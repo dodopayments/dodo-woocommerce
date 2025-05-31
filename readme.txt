@@ -25,5 +25,14 @@ Currently, we support credit card payments through Dodo Payment Gateway.
 
 == Changelog ==
 
+= 0.2.1 =
+* Fix product prices getting rounded off
+
+= 0.2.0 =
+* Feature: Add support for coupon codes(Fixed percentage type only).
+
+= 0.1.9 =
+* Fixed a bug where products with descriptions longer than 1000 characters would fail to process
+
 = 0.1.3 =
 * Initial release 
