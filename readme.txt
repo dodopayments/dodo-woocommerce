@@ -9,13 +9,31 @@ License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
 == Description ==
 
-Dodo Payments for WooCommerce allows you to accept payments through Dodo Payment Gateway.
+Dodo Payments for WooCommerce is a comprehensive payment solution that handles all your payment
+processing needs. As a Merchant of Record (MoR) service, we take care of payment processing, tax
+compliance, and financial regulations, allowing you to focus on growing your business. With
+support for multiple payment methods and automated tax calculations, Dodo Payments makes it easy
+to sell globally while staying compliant with local tax laws and regulations.
 
 == Installation ==
 
-1. Upload the plugin files to the `/wp-content/plugins/dodo-payments-for-woocommerce` directory, or install the plugin through the WordPress plugins screen directly.
+1. Upload the plugin files to the `/wp-content/plugins/dodo-payments-for-woocommerce` 
+  directory, or install the plugin through the WordPress plugins screen directly.
 2. Activate the plugin through the 'Plugins' screen in WordPress
 3. Use the Settings->Dodo Payments screen to configure the plugin
+
+== Supports ==
+
+- Digital Products, Ebooks, Ed-Tech and SaaS products
+- Percentage based coupon codes
+- Classic Checkout Flow
+- Payments from multiple countries
+- Product pricing in USD or INR
+
+== Does not Support ==
+
+- Block based checkout
+- Fixed amount or custom discount codes
 
 == Frequently Asked Questions ==
 
