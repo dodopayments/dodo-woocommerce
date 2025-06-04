@@ -218,17 +218,21 @@ function dodo_payments_init()
             public function process_payment($order_id)
             {
                 $order = wc_get_order($order_id);
-
                 $order->update_status('pending-payment', __('Awaiting payment via Dodo Payments', 'dodo-payments-for-woocommerce'));
                 wc_reduce_stock_levels($order_id);
 
-                WC()->cart->empty_cart();
-
                 if ($order->get_total() == 0) {
                     $order->payment_complete();
+
+                    WC()->cart->empty_cart();
+                    return array(
+                        'result' => 'success',
+                        'redirect' => $this->get_return_url($order)
+                    );
                 }
 
                 $res = $this->do_payment($order);
+                WC()->cart->empty_cart();
                 return $res;
             }
 
@@ -279,7 +283,12 @@ function dodo_payments_init()
                         }
                     }
 
-                    $payment = $this->dodo_payments_api->create_payment($order, $synced_products, $dodo_discount_code, $this->get_return_url($order));
+                    $payment = $this->dodo_payments_api->create_payment(
+                        $order,
+                        $synced_products,
+                        $dodo_discount_code,
+                        $this->get_return_url($order)
+                    );
                 } catch (Exception $e) {
                     $order->add_order_note(
                         sprintf(
