@@ -3,7 +3,7 @@ Contributors: ayushdodopayments
 Tags: payments, woocommerce, dodo
 Requires at least: 6.1
 Tested up to: 6.8
-Stable tag: 0.2.4
+Stable tag: 0.2.5
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -38,6 +38,9 @@ Dodo Payments for WooCommerce is a comprehensive payment solution that handles a
 Currently, we support credit card payments through Dodo Payment Gateway.
 
 == Changelog ==
+
+= 0.2.5 =
+* Fix: remove unsupported syntax for PHP 7
 
 = 0.2.4 =
 * Fix: clear cart only if the payment link is created
