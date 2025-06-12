@@ -4,7 +4,7 @@
  * Plugin Name: Dodo Payments for WooCommerce
  * Plugin URI: https://dodopayments.com
  * Description: Dodo Payments plugin for WooCommerce. Accept payments from your customers using Dodo Payments.
- * Version: 0.2.4
+ * Version: 0.2.5
  * Author: Dodo Payments
  * Developer: Dodo Payments
  * Text Domain: dodo-payments-for-woocommerce
@@ -56,7 +56,7 @@ function dodo_payments_init()
     if (class_exists('WC_Payment_Gateway')) {
         class Dodo_Payments_WC_Gateway extends WC_Payment_Gateway
         {
-            public null|string $instructions;
+            public ?string $instructions;
 
             private bool $testmode;
             private string $api_key;

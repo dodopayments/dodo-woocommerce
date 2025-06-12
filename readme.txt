@@ -3,17 +3,13 @@ Contributors: ayushdodopayments
 Tags: payments, woocommerce, dodo
 Requires at least: 6.1
 Tested up to: 6.8
-Stable tag: 0.2.4
+Stable tag: 0.2.5
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
 == Description ==
 
-Dodo Payments for WooCommerce is a comprehensive payment solution that handles all your payment
-processing needs. As a Merchant of Record (MoR) service, we take care of payment processing, tax
-compliance, and financial regulations, allowing you to focus on growing your business. With
-support for multiple payment methods and automated tax calculations, Dodo Payments makes it easy
-to sell globally while staying compliant with local tax laws and regulations.
+Dodo Payments for WooCommerce is a comprehensive payment solution that handles all your payment processing needs. As a Merchant of Record (MoR) service, we take care of payment processing, tax compliance, and financial regulations, allowing you to focus on growing your business. With support for multiple payment methods and automated tax calculations, Dodo Payments makes it easy to sell globally while staying compliant with local tax laws and regulations.
 
 == Installation ==
 
@@ -42,6 +38,9 @@ to sell globally while staying compliant with local tax laws and regulations.
 Currently, we support credit card payments through Dodo Payment Gateway.
 
 == Changelog ==
+
+= 0.2.5 =
+* Fix: remove unsupported syntax for PHP 7
 
 = 0.2.4 =
 * Fix: clear cart only if the payment link is created
