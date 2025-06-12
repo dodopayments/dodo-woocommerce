@@ -56,7 +56,7 @@ function dodo_payments_init()
     if (class_exists('WC_Payment_Gateway')) {
         class Dodo_Payments_WC_Gateway extends WC_Payment_Gateway
         {
-            public null|string $instructions;
+            public ?string $instructions;
 
             private bool $testmode;
             private string $api_key;
