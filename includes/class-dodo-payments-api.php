@@ -484,4 +484,48 @@ class Dodo_Payments_API
   {
     return $this->testmode ? 'https://test.dodopayments.com' : 'https://live.dodopayments.com';
   }
+
+  /**
+   * Tests the API connection to verify credentials
+   * 
+   * @return true|WP_Error True if connection is successful, WP_Error otherwise
+   */
+  public function test_connection()
+  {
+    // Try to get a list of products as a simple API test
+    $response = $this->get('/products?limit=1');
+    
+    if (is_wp_error($response)) {
+      return $response;
+    }
+    
+    $status_code = wp_remote_retrieve_response_code($response);
+    
+    if ($status_code === 401) {
+      return new WP_Error('unauthorized', __('API Key is invalid. Please check your API key and try again.', 'dodo-payments-for-woocommerce'));
+    }
+    
+    if ($status_code !== 200) {
+      $body = wp_remote_retrieve_body($response);
+      $error_message = '';
+      
+      try {
+        $json_body = json_decode($body, true);
+        $error_message = isset($json_body['message']) ? $json_body['message'] : $body;
+      } catch (Exception $e) {
+        $error_message = $body;
+      }
+      
+      return new WP_Error(
+        'api_error',
+        sprintf(
+          __('API returned status code %d: %s', 'dodo-payments-for-woocommerce'),
+          $status_code,
+          $error_message
+        )
+      );
+    }
+    
+    return true;
+  }
 }
