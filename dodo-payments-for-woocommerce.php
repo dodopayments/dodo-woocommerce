@@ -894,6 +894,28 @@ function dodo_payments_init()
                     case 'succeeded':
                         $order->payment_complete($payment_id);
                         $order->update_status('completed', __('Payment completed by Dodo Payments', 'dodo-payments-for-woocommerce'));
+
+                        if (isset($payload['data']['subscription_id'])) {
+                            $subscription_id = $payload['data']['subscription_id'];
+                            $wc_subscription_id = Dodo_Payments_Subscription_DB::get_wc_subscription_id($subscription_id);
+
+                            if (function_exists('wcs_get_subscription')) {
+                                $subscription = wcs_get_subscription($wc_subscription_id);
+                            }
+
+                            if (!$subscription) {
+                                error_log(
+                                    'Dodo Payments: Could not find WooCommerce subscription '
+                                    . $wc_subscription_id
+                                    . ' for subscription ID '
+                                    . $subscription_id
+                                );
+                                return;
+                            }
+
+                            $this->create_renewal_order($subscription, $payment_id);
+                        }
+
                         break;
 
                     case 'failed':
@@ -1014,6 +1036,7 @@ function dodo_payments_init()
                         break;
 
                     case 'renewed':
+                        // doesn't do anything yet
                         $this->handle_subscription_renewal($subscription);
                         break;
 
@@ -1054,11 +1077,28 @@ function dodo_payments_init()
              */
             private function handle_subscription_renewal($subscription)
             {
+                // Does nothing as we're handling renewal from the 'payment.succeeded' webhook
+                // TODO: handle renewal from the 'subscription.renewed' webhook when
+                // it includes the `payment_id` and pass it to `$order->payment_complete($payment_id)`.
+                // This will help the merchant link the renewal order to the payment ID.
+            }
+
+            /**
+             * Create a renewal order for a subscription
+             *
+             * @param WC_Subscription $subscription
+             * @param string $payment_id
+             * @return void
+             */
+            private function create_renewal_order($subscription, $payment_id)
+            {
                 if (function_exists('wcs_create_renewal_order')) {
                     $renewal_order = wcs_create_renewal_order($subscription);
                     if ($renewal_order) {
-                        $renewal_order->payment_complete();
-                        $renewal_order->update_status('completed', __('Payment completed by Dodo Payments', 'dodo-payments-for-woocommerce'));
+                        $renewal_order->payment_complete($payment_id);
+                        $renewal_order->set_payment_method(wc_get_payment_gateway_by_order($subscription));
+
+                        $renewal_order->update_status('completed');
                         $subscription->add_order_note(__('Subscription renewed by Dodo Payments', 'dodo-payments-for-woocommerce'));
                     }
                 }
