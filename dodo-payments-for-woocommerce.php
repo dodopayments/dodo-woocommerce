@@ -833,9 +833,9 @@ function dodo_payments_init()
 
                 // Can be
                 $type = $payload['type'];
-                $type_parts = explode('.', $type);
+                $type_parts = explode('.', $type, 2);
 
-                if (count($type_parts) < 2) {
+                if (count($type_parts) !== 2) {
                     error_log('Dodo Payments: Invalid webhook event type format: ' . $type);
                     if ($this->testmode) {
                         status_header(400);
