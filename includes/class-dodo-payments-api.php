@@ -2,486 +2,870 @@
 
 class Dodo_Payments_API
 {
-  private bool $testmode;
-  private string $api_key;
-  /**
-   * Can be 'digital_products', 'saas', 'e_book', 'edtech'
-   * @var string
-   */
-  private string $global_tax_category;
-  /**
-   * Whether tax is included in all product prices
-   * @var bool
-   */
-  private bool $global_tax_inclusive;
+    private bool $testmode;
+    private string $api_key;
+    /**
+     * Can be 'digital_products', 'saas', 'e_book', 'edtech'
+     * @var string
+     */
+    private string $global_tax_category;
+    /**
+     * Whether tax is included in all product prices
+     * @var bool
+     */
+    private bool $global_tax_inclusive;
 
-  /**
-   * @param array{testmode: bool, api_key: string, global_tax_category: string, global_tax_inclusive: bool} $options
-   */
-  public function __construct($options)
-  {
-    $this->testmode = $options['testmode'];
-    $this->api_key = $options['api_key'];
-    $this->global_tax_category = $options['global_tax_category'];
-    $this->global_tax_inclusive = $options['global_tax_inclusive'];
-  }
+    /**
+     * @param array{testmode: bool, api_key: string, global_tax_category: string, global_tax_inclusive: bool} $options
+     */
+    public function __construct($options)
+    {
+        $this->testmode = $options['testmode'];
+        $this->api_key = $options['api_key'];
+        $this->global_tax_category = $options['global_tax_category'];
+        $this->global_tax_inclusive = $options['global_tax_inclusive'];
+    }
 
-  /**
-   * Creates a product
-   * 
-   * @param WC_Product $product Product in WooCommerce
-   * @return array{product_id: string} Product in the Dodo Payments API 
-   * @throws \Exception
-   */
-  public function create_product($product)
-  {
-    $stripped_description = wp_strip_all_tags($product->get_description());
-    $truncated_description = mb_substr($stripped_description, 0, min(999, mb_strlen($stripped_description)));
+    /**
+     * Creates a product
+     *
+     * @param WC_Product $product Product in WooCommerce
+     * @return array{product_id: string} Product in the Dodo Payments API
+     * @throws \Exception
+     */
+    public function create_product($product)
+    {
+        $stripped_description = wp_strip_all_tags($product->get_description());
+        $truncated_description = mb_substr($stripped_description, 0, min(999, mb_strlen($stripped_description)));
 
-    $body = array(
-      'name' => $product->get_name(),
-      'description' => $truncated_description,
-      'price' => array(
+        $body = array(
+        'name' => $product->get_name(),
+        'description' => $truncated_description,
+        'price' => array(
         'type' => 'one_time_price',
         'currency' => get_woocommerce_currency(),
         'price' => (int) ($product->get_price() * 100), // fixme: assuming that the currency is INR or USD
         'discount' => 0, // todo: update defaults
         'purchasing_power_parity' => false, // todo: deal with it when the feature is implemented
         'tax_inclusive' => $this->global_tax_inclusive,
-      ),
-      'tax_category' => $this->global_tax_category,
-    );
+        ),
+        'tax_category' => $this->global_tax_category,
+        );
 
-    $res = $this->post('/products', $body);
+        $res = $this->post('/products', $body);
 
-    if (is_wp_error($res)) {
-      throw new Exception('Failed to create product: ' . esc_html($res->get_error_message()));
+        if (is_wp_error($res)) {
+            throw new Exception('Failed to create product: ' . esc_html($res->get_error_message()));
+        }
+
+        if (wp_remote_retrieve_response_code($res) !== 200) {
+            throw new Exception('Failed to create product: ' . esc_html($res['body']));
+        }
+
+        return json_decode($res['body'], true);
     }
 
-    if (wp_remote_retrieve_response_code($res) !== 200) {
-      throw new Exception('Failed to create product: ' . esc_html($res['body']));
-    }
+    /**
+     * Update a product in the Dodo Payments API
+     *
+     * @param string $dodo_product_id
+     * @param WC_Product $product
+     * @throws \Exception
+     * @return void
+     */
+    public function update_product($dodo_product_id, $product)
+    {
+        $dodo_product = $this->get_product($dodo_product_id);
 
-    return json_decode($res['body'], true);
-  }
+        if (!$dodo_product) {
+            throw new Exception('Product (' . esc_html($dodo_product_id) . ') not found');
+        }
 
-  /**
-   * Update a product in the Dodo Payments API
-   * 
-   * @param string $dodo_product_id
-   * @param WC_Product $product
-   * @throws \Exception
-   * @return void
-   */
-  public function update_product($dodo_product_id, $product)
-  {
-    $dodo_product = $this->get_product($dodo_product_id);
+        $stripped_description = wp_strip_all_tags($product->get_description());
+        $truncated_description = mb_substr($stripped_description, 0, min(999, mb_strlen($stripped_description)));
 
-    if (!$dodo_product) {
-      throw new Exception('Product (' . esc_html($dodo_product_id) . ') not found');
-    }
-
-    $stripped_description = wp_strip_all_tags($product->get_description());
-    $truncated_description = mb_substr($stripped_description, 0, min(999, mb_strlen($stripped_description)));
-
-    // ignore global options, respect the tax_category and tax_inclusive set
-    // from the dashboard
-    $body = array(
-      'name' => $product->get_name(),
-      'description' => $truncated_description,
-      'price' => array(
+        // ignore global options, respect the tax_category and tax_inclusive set
+        // from the dashboard
+        $body = array(
+        'name' => $product->get_name(),
+        'description' => $truncated_description,
+        'price' => array(
         'type' => 'one_time_price',
         'currency' => get_woocommerce_currency(),
         'price' => (int) ($product->get_price() * 100), // fixme: assuming that the currency is INR or USD
         'discount' => $dodo_product['price']['discount'],
         'purchasing_power_parity' => $dodo_product['price']['purchasing_power_parity'],
         'tax_inclusive' => $dodo_product['price']['tax_inclusive'],
-      ),
-      'tax_category' => $dodo_product['tax_category'],
-    );
+        ),
+        'tax_category' => $dodo_product['tax_category'],
+        );
 
-    $res = $this->patch("/products/{$dodo_product_id}", $body);
+        $res = $this->patch("/products/{$dodo_product_id}", $body);
 
-    if (is_wp_error($res)) {
-      throw new Exception("Failed to update product: " . esc_html($res->get_error_message()));
+        if (is_wp_error($res)) {
+            throw new Exception("Failed to update product: " . esc_html($res->get_error_message()));
+        }
+
+        if (wp_remote_retrieve_response_code($res) !== 200) {
+            throw new Exception("Failed to update product: " . esc_html($res['body']));
+        }
+
+        return;
     }
 
-    if (wp_remote_retrieve_response_code($res) !== 200) {
-      throw new Exception("Failed to update product: " . esc_html($res['body']));
+    /**
+     * Syncs the image for a product
+     *
+     * @param WC_Product $product
+     * @param string $dodo_product_id
+     * @throws \Exception
+     * @return void
+     */
+    public function sync_image_for_product($product, $dodo_product_id)
+    {
+        $image_id = $product->get_image_id();
+
+        if (!$image_id) {
+            throw new Exception('Product has no image');
+        }
+
+        $image_path = get_attached_file($image_id);
+        if (!$image_path) {
+            throw new Exception('Could not find image file');
+        }
+
+        $image_contents = file_get_contents($image_path);
+        if ($image_contents === false) {
+            throw new Exception('Could not read image file');
+        }
+
+        ['url' => $upload_url, 'image_id' => $image_id] = $this->get_upload_url_and_image_id($dodo_product_id);
+        $response = wp_remote_request($upload_url, array(
+        'method' => 'PUT',
+        'body' => $image_contents,
+        ));
+
+        if (is_wp_error($response)) {
+            throw new Exception('Failed to upload image: ' . esc_html($response->get_error_message()));
+        }
+
+        if (wp_remote_retrieve_response_code($response) !== 200) {
+            throw new Exception('Failed to upload image: ' . esc_html($response['body']));
+        }
+
+        $this->set_product_image_id($dodo_product_id, $image_id);
+
+        return;
     }
 
-    return;
-  }
-
-  /**
-   * Syncs the image for a product
-   * 
-   * @param WC_Product $product
-   * @param string $dodo_product_id
-   * @throws \Exception
-   * @return void
-   */
-  public function sync_image_for_product($product, $dodo_product_id)
-  {
-    $image_id = $product->get_image_id();
-
-    if (!$image_id) {
-      throw new Exception('Product has no image');
-    }
-
-    $image_path = get_attached_file($image_id);
-    if (!$image_path) {
-      throw new Exception('Could not find image file');
-    }
-
-    $image_contents = file_get_contents($image_path);
-    if ($image_contents === false) {
-      throw new Exception('Could not read image file');
-    }
-
-    ['url' => $upload_url, 'image_id' => $image_id] = $this->get_upload_url_and_image_id($dodo_product_id);
-    $response = wp_remote_request($upload_url, array(
-      'method' => 'PUT',
-      'body' => $image_contents,
-    ));
-
-    if (is_wp_error($response)) {
-      throw new Exception('Failed to upload image: ' . esc_html($response->get_error_message()));
-    }
-
-    if (wp_remote_retrieve_response_code($response) !== 200) {
-      throw new Exception('Failed to upload image: ' . esc_html($response['body']));
-    }
-
-    $this->set_product_image_id($dodo_product_id, $image_id);
-
-    return;
-  }
-
-  /**
-   * Creates a payment in the Dodo Payments API
-   * 
-   * @param WC_Order $order
-   * @param array{amount: mixed, product_id: string, quantity: mixed}[] $synced_products
-   * @param string|null $dodo_discount_code Optional. The code of the discount code to apply to the payment.
-   * @param string $return_url The URL to redirect to after the payment is completed
-   * @throws \Exception
-   * @return array{payment_id: string, payment_link: string}
-   */
-  public function create_payment($order, $synced_products, $dodo_discount_code, $return_url)
-  {
-    $request = array(
-      'billing' => array(
+    /**
+     * Creates a payment in the Dodo Payments API
+     *
+     * @param WC_Order $order
+     * @param array{amount: mixed, product_id: string, quantity: mixed}[] $synced_products
+     * @param string|null $dodo_discount_code Optional. The code of the discount code to apply to the payment.
+     * @param string $return_url The URL to redirect to after the payment is completed
+     * @throws \Exception
+     * @return array{payment_id: string, payment_link: string}
+     */
+    public function create_payment($order, $synced_products, $dodo_discount_code, $return_url)
+    {
+        $request = array(
+        'billing' => array(
         'city' => $order->get_billing_city(),
         'country' => $order->get_billing_country(),
         'state' => $order->get_billing_state(),
         'street' => $order->get_billing_address_1() . ' ' . $order->get_billing_address_2(),
         'zipcode' => $order->get_billing_postcode(),
-      ),
-      'customer' => array(
+        ),
+        'customer' => array(
         'email' => $order->get_billing_email(),
         'name' => $order->get_billing_first_name() . ' ' . $order->get_billing_last_name(),
-      ),
-      'product_cart' => $synced_products,
-      'discount_code' => $dodo_discount_code,
-      'payment_link' => true,
-      'return_url' => $return_url,
-    );
-
-    $res = $this->post('/payments', $request);
-
-    if (is_wp_error($res)) {
-      throw new Exception("Failed to create payment: " . esc_html($res->get_error_message()));
-    }
-
-    if (wp_remote_retrieve_response_code($res) !== 200) {
-      throw new Exception("Failed to create payment: " . esc_html($res['body']));
-    }
-
-    return json_decode($res['body'], true);
-  }
-
-  /**
-   * Gets the upload url and image id for a product
-   * 
-   * @param string $dodo_product_id
-   * @return array{url: string, image_id: string}
-   * @throws \Exception
-   */
-  private function get_upload_url_and_image_id($dodo_product_id)
-  {
-    $res = $this->put("/products/{$dodo_product_id}/images?force_update=true", null);
-
-    if (is_wp_error($res))
-      throw new Exception('Failed to get upload url and image id for product ('
-        . esc_html($dodo_product_id) . '): '
-        . esc_html($res->get_error_message()));
-
-    if ($res['response']['code'] !== 200)
-      throw new Exception('Failed to get upload url and image id for product ('
-        . esc_html($dodo_product_id) . '): '
-        . esc_html($res['body']));
-
-    return json_decode($res['body'], true);
-  }
-
-
-  /**
-   * Sets an image id to a product
-   * 
-   * @param string $dodo_product_id
-   * @param string $image_id
-   * @return void
-   * @throws \Exception
-   */
-  private function set_product_image_id($dodo_product_id, $image_id)
-  {
-    $res = $this->patch("/products/{$dodo_product_id}", array('image_id' => $image_id));
-
-    if (is_wp_error($res))
-      throw new Exception('Failed to assign image (' . esc_html($image_id)
-        . ') to product (' . esc_html($dodo_product_id)
-        . '): ' . esc_html($res->get_error_message()));
-
-    if ($res['response']['code'] !== 200)
-      throw new Exception('Failed to assign image (' . esc_html($image_id)
-        . ') to product (' . esc_html($dodo_product_id)
-        . '): ' . esc_html($res['body']));
-
-    return;
-  }
-
-  /**
-   * Get a product from the Dodo Payments API
-   * 
-   * @param string $dodo_product_id
-   * @return array{
-   *    addons: array<string>,
-   *    business_id: string,
-   *    created_at: string,
-   *    description: string,
-   *    image: string,
-   *    is_recurring: bool,
-   *    license_key_activation_message: string,
-   *    license_key_activations_limit: int,
-   *    license_key_duration: array{
-   *      count: int,
-   *      interval: string
-   *    },
-   *    license_key_enabled: bool,
-   *    name: string,
-   *    price: array{
-   *      currency: string,
-   *      discount: int,
-   *      pay_what_you_want: bool,
-   *      price: int,
-   *      purchasing_power_parity: bool,
-   *      suggested_price: int,
-   *      tax_inclusive: bool,
-   *      type: string
-   *    },
-   *    product_id: string,
-   *    tax_category: string,
-   *    updated_at: string
-   * }|false
-   */
-  public function get_product($dodo_product_id)
-  {
-    $res = $this->get("/products/{$dodo_product_id}");
-
-    if (is_wp_error($res)) {
-      error_log("Dodo Payments: Failed to get product ($dodo_product_id): " . $res->get_error_message());
-      return false;
-    }
-
-    if (wp_remote_retrieve_response_code($res) === 404) {
-      error_log("Dodo Payments: Product ($dodo_product_id) not found: " . $res['body']);
-      return false;
-    }
-
-    return json_decode($res['body'], true);
-  }
-
-  /**
-   * Get discount code info from the Dodo Payments API
-   * 
-   * @param string $dodo_discount_id
-   * @return array{
-   *    amount: int,
-   *    business_id: string,
-   *    code: string,
-   *    created_at: string,
-   *    discount_id: string,
-   *    expires_at: string,
-   *    name: string,
-   *    restricted_to: array<string>,
-   *    times_used: int,
-   *    type: string,
-   *    usage_limit: int
-   * }|false
-   */
-  public function get_discount_code($dodo_discount_id)
-  {
-    $res = $this->get("/discounts/{$dodo_discount_id}");
-
-    if (is_wp_error($res)) {
-      error_log("Dodo Payments: Failed to get discount code ($dodo_discount_id): " . $res->get_error_message());
-      return false;
-    }
-
-    if (wp_remote_retrieve_response_code($res) === 404) {
-      error_log("Dodo Payments: Discount code ($dodo_discount_id) not found: " . $res['body']);
-      return false;
-    }
-
-    return json_decode($res['body'], true);
-  }
-
-  /**
-   * Creates a discount code in the Dodo Payments API
-   * 
-   * @param array{
-   *    amount: int,
-   *    code: string,
-   *    expires_at: string,
-   *    name: string,
-   *    restricted_to: string[],
-   *    type: string,
-   *    usage_limit: int
-   * } $dodo_discount_body
-   * 
-   * @return array{
-   *    amount: int,
-   *    business_id: string,
-   *    code: string,
-   *    created_at: string,
-   *    discount_id: string,
-   *    expires_at: string,
-   *    name: string,
-   *    restricted_to: string[],
-   *    times_used: int,
-   *    type: string,
-   *    usage_limit: int
-   * }
-   * @throws \Exception
-   */
-  public function create_discount_code($dodo_discount_body)
-  {
-    $res = $this->post('/discounts', $dodo_discount_body);
-
-    if (is_wp_error($res)) {
-      throw new Exception('Failed to create discount code: ' . esc_html($res->get_error_message()), );
-    }
-
-    if (wp_remote_retrieve_response_code($res) !== 200) {
-      throw new Exception('Failed to create discount code: ' . esc_html($res['body']));
-    }
-
-    return json_decode($res['body'], true);
-  }
-
-  /**
-   * Updates a discount code in the Dodo Payments API
-   * 
-   * @param string $dodo_discount_id
-   * @param array{
-   *    amount: int,
-   *    code: string,
-   *    expires_at: string,
-   *    name: string,
-   *    restricted_to: string[],
-   *    type: string,
-   *    usage_limit: int
-   * } $dodo_discount_body
-   * 
-   * @return array{
-   *    amount: int,
-   *    business_id: string,
-   *    code: string,
-   *    created_at: string,
-   *    discount_id: string,
-   *    expires_at: string,
-   *    name: string,
-   *    restricted_to: string[],
-   *    times_used: int,
-   *    type: string,
-   *    usage_limit: int
-   * }
-   * @throws \Exception
-   */
-  public function update_discount_code($dodo_discount_id, $dodo_discount_body)
-  {
-    $res = $this->patch("/discounts/{$dodo_discount_id}", $dodo_discount_body);
-
-    if (is_wp_error($res)) {
-      throw new Exception('Failed to update discount code: ' . esc_html($res->get_error_message()));
-    }
-
-    if (wp_remote_retrieve_response_code($res) !== 200) {
-      throw new Exception('Dodo Payments: Failed to update discount code: ' . esc_html($res['body']));
-    }
-
-    return json_decode($res['body'], true);
-  }
-
-  private function get($path)
-  {
-    return wp_remote_get(
-      $this->get_base_url() . $path,
-      array(
-        'headers' => array(
-          'Authorization' => 'Bearer ' . $this->api_key,
         ),
-      )
-    );
-  }
+        'product_cart' => $synced_products,
+        'discount_code' => $dodo_discount_code,
+        'payment_link' => true,
+        'return_url' => $return_url,
+        );
 
-  private function post($path, $body)
-  {
-    return wp_remote_post(
-      $this->get_base_url() . $path,
-      array(
-        'headers' => array(
-          'Authorization' => 'Bearer ' . $this->api_key,
-          'Content-Type' => 'application/json',
+        $res = $this->post('/payments', $request);
+
+        if (is_wp_error($res)) {
+            throw new Exception("Failed to create payment: " . esc_html($res->get_error_message()));
+        }
+
+        if (wp_remote_retrieve_response_code($res) !== 200) {
+            throw new Exception("Failed to create payment: " . esc_html($res['body']));
+        }
+
+        return json_decode($res['body'], true);
+    }
+
+    /**
+     * Gets the upload url and image id for a product
+     *
+     * @param string $dodo_product_id
+     * @return array{url: string, image_id: string}
+     * @throws \Exception
+     */
+    private function get_upload_url_and_image_id($dodo_product_id)
+    {
+        $res = $this->put("/products/{$dodo_product_id}/images?force_update=true", null);
+
+        if (is_wp_error($res)) {
+            throw new Exception('Failed to get upload url and image id for product ('
+            . esc_html($dodo_product_id) . '): '
+            . esc_html($res->get_error_message()));
+        }
+
+        if ($res['response']['code'] !== 200) {
+            throw new Exception('Failed to get upload url and image id for product ('
+            . esc_html($dodo_product_id) . '): '
+            . esc_html($res['body']));
+        }
+
+        return json_decode($res['body'], true);
+    }
+
+
+    /**
+     * Sets an image id to a product
+     *
+     * @param string $dodo_product_id
+     * @param string $image_id
+     * @return void
+     * @throws \Exception
+     */
+    private function set_product_image_id($dodo_product_id, $image_id)
+    {
+        $res = $this->patch("/products/{$dodo_product_id}", array('image_id' => $image_id));
+
+        if (is_wp_error($res)) {
+            throw new Exception('Failed to assign image (' . esc_html($image_id)
+            . ') to product (' . esc_html($dodo_product_id)
+            . '): ' . esc_html($res->get_error_message()));
+        }
+
+        if ($res['response']['code'] !== 200) {
+            throw new Exception('Failed to assign image (' . esc_html($image_id)
+            . ') to product (' . esc_html($dodo_product_id)
+            . '): ' . esc_html($res['body']));
+        }
+
+        return;
+    }
+
+    /**
+     * Get a product from the Dodo Payments API
+     *
+     * @param string $dodo_product_id
+     * @return array{
+     *    addons: array<string>,
+     *    business_id: string,
+     *    created_at: string,
+     *    description: string,
+     *    image: string,
+     *    is_recurring: bool,
+     *    license_key_activation_message: string,
+     *    license_key_activations_limit: int,
+     *    license_key_duration: array{
+     *      count: int,
+     *      interval: string
+     *    },
+     *    license_key_enabled: bool,
+     *    name: string,
+     *    price: array{
+     *      currency: string,
+     *      discount: int,
+     *      pay_what_you_want: bool,
+     *      price: int,
+     *      purchasing_power_parity: bool,
+     *      suggested_price: int,
+     *      tax_inclusive: bool,
+     *      type: string
+     *    },
+     *    product_id: string,
+     *    tax_category: string,
+     *    updated_at: string
+     * }|false
+     */
+    public function get_product($dodo_product_id)
+    {
+        $res = $this->get("/products/{$dodo_product_id}");
+
+        if (is_wp_error($res)) {
+            error_log("Dodo Payments: Failed to get product ($dodo_product_id): " . $res->get_error_message());
+            return false;
+        }
+
+        if (wp_remote_retrieve_response_code($res) === 404) {
+            error_log("Dodo Payments: Product ($dodo_product_id) not found: " . $res['body']);
+            return false;
+        }
+
+        return json_decode($res['body'], true);
+    }
+
+    /**
+     * Get discount code info from the Dodo Payments API
+     *
+     * @param string $dodo_discount_id
+     * @return array{
+     *    amount: int,
+     *    business_id: string,
+     *    code: string,
+     *    created_at: string,
+     *    discount_id: string,
+     *    expires_at: string,
+     *    name: string,
+     *    restricted_to: array<string>,
+     *    times_used: int,
+     *    type: string,
+     *    usage_limit: int
+     * }|false
+     */
+    public function get_discount_code($dodo_discount_id)
+    {
+        $res = $this->get("/discounts/{$dodo_discount_id}");
+
+        if (is_wp_error($res)) {
+            error_log("Dodo Payments: Failed to get discount code ($dodo_discount_id): " . $res->get_error_message());
+            return false;
+        }
+
+        if (wp_remote_retrieve_response_code($res) === 404) {
+            error_log("Dodo Payments: Discount code ($dodo_discount_id) not found: " . $res['body']);
+            return false;
+        }
+
+        return json_decode($res['body'], true);
+    }
+
+    /**
+     * Creates a discount code in the Dodo Payments API
+     *
+     * @param array{
+     *    amount: int,
+     *    code: string,
+     *    expires_at: string,
+     *    name: string,
+     *    restricted_to: string[],
+     *    type: string,
+     *    usage_limit: int
+     * } $dodo_discount_body
+     *
+     * @return array{
+     *    amount: int,
+     *    business_id: string,
+     *    code: string,
+     *    created_at: string,
+     *    discount_id: string,
+     *    expires_at: string,
+     *    name: string,
+     *    restricted_to: string[],
+     *    times_used: int,
+     *    type: string,
+     *    usage_limit: int
+     * }
+     * @throws \Exception
+     */
+    public function create_discount_code($dodo_discount_body)
+    {
+        $res = $this->post('/discounts', $dodo_discount_body);
+
+        if (is_wp_error($res)) {
+            throw new Exception('Failed to create discount code: ' . esc_html($res->get_error_message()), );
+        }
+
+        if (wp_remote_retrieve_response_code($res) !== 200) {
+            throw new Exception('Failed to create discount code: ' . esc_html($res['body']));
+        }
+
+        return json_decode($res['body'], true);
+    }
+
+    /**
+     * Updates a discount code in the Dodo Payments API
+     *
+     * @param string $dodo_discount_id
+     * @param array{
+     *    amount: int,
+     *    code: string,
+     *    expires_at: string,
+     *    name: string,
+     *    restricted_to: string[],
+     *    type: string,
+     *    usage_limit: int
+     * } $dodo_discount_body
+     *
+     * @return array{
+     *    amount: int,
+     *    business_id: string,
+     *    code: string,
+     *    created_at: string,
+     *    discount_id: string,
+     *    expires_at: string,
+     *    name: string,
+     *    restricted_to: string[],
+     *    times_used: int,
+     *    type: string,
+     *    usage_limit: int
+     * }
+     * @throws \Exception
+     */
+    public function update_discount_code($dodo_discount_id, $dodo_discount_body)
+    {
+        $res = $this->patch("/discounts/{$dodo_discount_id}", $dodo_discount_body);
+
+        if (is_wp_error($res)) {
+            throw new Exception('Failed to update discount code: ' . esc_html($res->get_error_message()));
+        }
+
+        if (wp_remote_retrieve_response_code($res) !== 200) {
+            throw new Exception('Dodo Payments: Failed to update discount code: ' . esc_html($res['body']));
+        }
+
+        return json_decode($res['body'], true);
+    }
+
+    /**
+     * Creates a subscription product
+     *
+     * @param WC_Product $product Product in WooCommerce
+     * @return array{product_id: string} Product in the Dodo Payments API
+     * @throws \Exception
+     */
+    public function create_subscription_product($product)
+    {
+        if (!class_exists('WC_Subscriptions_Product')) {
+            throw new Exception('WooCommerce Subscriptions plugin is required for subscription products');
+        }
+
+        $stripped_description = wp_strip_all_tags($product->get_description());
+        $truncated_description = mb_substr($stripped_description, 0, min(999, mb_strlen($stripped_description)));
+
+        // Get subscription details
+        $period = WC_Subscriptions_Product::get_period($product);
+        $period_count = WC_Subscriptions_Product::get_interval($product);
+        $length = WC_Subscriptions_Product::get_length($product);
+
+        if ($length === 0) {
+            // default to 10 years
+            switch ($period) {
+                case 'day':
+                    $length = 3650;
+                    break;
+                case 'week':
+                    $length = 520;
+                    break;
+                case 'month':
+                    $length = 120;
+                    break;
+                case 'year':
+                    $length = 10;
+                    break;
+            }
+        }
+
+        $trial_length = WC_Subscriptions_Product::get_trial_length($product);
+        $trial_period = WC_Subscriptions_Product::get_trial_period($product);
+
+        $trial_period_days = 0;
+        if ($trial_length > 0) {
+            switch ($trial_period) {
+                case 'day':
+                    $trial_period_days = $trial_length;
+                    break;
+                case 'week':
+                    $trial_period_days = $trial_length * 7;
+                    break;
+                case 'month':
+                    $trial_period_days = $trial_length * 30;
+                    break;
+                case 'year':
+                    $trial_period_days = $trial_length * 365;
+                    break;
+            }
+        }
+
+        $price_data = array(
+        'currency' => get_woocommerce_currency(),
+        'discount' => 0,
+        'payment_frequency_count' => (int) $period_count,
+        'payment_frequency_interval' => self::convert_wc_period_to_dodo($period),
+        'price' => (int) ($product->get_price() * 100),
+        'purchasing_power_parity' => false,
+        'subscription_period_count' => (int) $length,
+        'subscription_period_interval' => self::convert_wc_period_to_dodo($period),
+        'type' => 'recurring_price',
+        'tax_inclusive' => $this->global_tax_inclusive,
+        'trial_period_days' => $trial_period_days,
+        );
+
+        $body = array(
+        'name' => $product->get_name(),
+        'description' => $truncated_description,
+        'price' => $price_data,
+        'tax_category' => $this->global_tax_category,
+        );
+
+        $res = $this->post('/products', $body);
+
+        if (is_wp_error($res)) {
+            throw new Exception('Failed to create subscription product: ' . esc_html($res->get_error_message()));
+        }
+
+        if (wp_remote_retrieve_response_code($res) !== 200) {
+            throw new Exception('Failed to create subscription product: ' . esc_html($res['body']));
+        }
+
+        return json_decode($res['body'], true);
+    }
+
+    /**
+     * Updates a subscription product in the Dodo Payments API
+     *
+     * @param string $dodo_product_id
+     * @param WC_Product $product
+     * @throws \Exception
+     * @return void
+     */
+    public function update_subscription_product($dodo_product_id, $product)
+    {
+        if (!class_exists('WC_Subscriptions_Product')) {
+            throw new Exception('WooCommerce Subscriptions plugin is required for subscription products');
+        }
+
+        $dodo_product = $this->get_product($dodo_product_id);
+
+        if (!$dodo_product) {
+            throw new Exception('Product (' . esc_html($dodo_product_id) . ') not found');
+        }
+
+        $stripped_description = wp_strip_all_tags($product->get_description());
+        $truncated_description = mb_substr($stripped_description, 0, min(999, mb_strlen($stripped_description)));
+
+        $period = WC_Subscriptions_Product::get_period($product);
+        $period_count = WC_Subscriptions_Product::get_interval($product);
+        $length = WC_Subscriptions_Product::get_length($product);
+
+        if ($length === 0) {
+            // default to 10 years, if subscription length is not set
+            switch ($period) {
+                case 'day':
+                    $length = 3650;
+                    break;
+                case 'week':
+                    $length = 520;
+                    break;
+                case 'month':
+                    $length = 120;
+                    break;
+                case 'year':
+                    $length = 10;
+                    break;
+            }
+        }
+
+        $trial_length = WC_Subscriptions_Product::get_trial_length($product);
+        $trial_period = WC_Subscriptions_Product::get_trial_period($product);
+
+        $trial_period_days = 0;
+        if ($trial_length > 0) {
+            switch ($trial_period) {
+                case 'day':
+                    $trial_period_days = $trial_length;
+                    break;
+                case 'week':
+                    $trial_period_days = $trial_length * 7;
+                    break;
+                case 'month':
+                    $trial_period_days = $trial_length * 30;
+                    break;
+                case 'year':
+                    $trial_period_days = $trial_length * 365;
+                    break;
+            }
+        }
+
+        $price_data = array(
+        'currency' => get_woocommerce_currency(),
+        'payment_frequency_count' => (int) $period_count,
+        'payment_frequency_interval' => self::convert_wc_period_to_dodo($period),
+        'price' => (int) ($product->get_price() * 100),
+        'discount' => $dodo_product['price']['discount'],
+        'purchasing_power_parity' => $dodo_product['price']['purchasing_power_parity'],
+        'subscription_period_count' => (int) $length,
+        'subscription_period_interval' => self::convert_wc_period_to_dodo($period),
+        'type' => 'recurring_price',
+        'tax_inclusive' => $dodo_product['price']['tax_inclusive'],
+        'trial_period_days' => $trial_period_days,
+        );
+
+        $body = array(
+        'name' => $product->get_name(),
+        'description' => $truncated_description,
+        'price' => $price_data,
+        'tax_category' => $dodo_product['tax_category'],
+        );
+
+        $res = $this->patch("/products/{$dodo_product_id}", $body);
+
+        if (is_wp_error($res)) {
+            throw new Exception('Failed to update subscription product: ' . esc_html($res->get_error_message()));
+        }
+
+        if (wp_remote_retrieve_response_code($res) !== 200) {
+            throw new Exception('Failed to update subscription product: ' . esc_html($res['body']));
+        }
+
+        return;
+    }
+
+    /**
+     * Creates a subscription in the Dodo Payments API
+     *
+     * @param WC_Order $order
+     * @param array{amount: mixed, product_id: string, quantity: mixed}[] $synced_products
+     * @param string|null $dodo_discount_code Optional. The code of the discount code to apply to the subscription.
+     * @param string $return_url The URL to redirect to after the subscription is completed
+     * @param bool $mandate_only Whether to only authorize payment method without immediate charge
+     * @throws \Exception
+     * @return array{subscription_id: string, payment_link: string}
+     */
+    public function create_subscription($order, $synced_products, $dodo_discount_code, $return_url, $mandate_only = false)
+    {
+        // Get the first product (subscriptions typically have one product)
+        $first_product = $synced_products[0];
+
+        $request = array(
+        'billing' => array(
+        'city' => $order->get_billing_city(),
+        'country' => $order->get_billing_country(),
+        'state' => $order->get_billing_state(),
+        'street' => $order->get_billing_address_1() . ' ' . $order->get_billing_address_2(),
+        'zipcode' => $order->get_billing_postcode(),
         ),
-        'body' => json_encode($body),
-      )
-    );
-  }
-
-  private function put($path, $body)
-  {
-    return wp_remote_request(
-      $this->get_base_url() . $path,
-      array(
-        'method' => 'PUT',
-        'headers' => array(
-          'Authorization' => 'Bearer ' . $this->api_key,
-          'Content-Type' => 'application/json',
+        'customer' => array(
+        'email' => $order->get_billing_email(),
+        'name' => $order->get_billing_first_name() . ' ' . $order->get_billing_last_name(),
         ),
-        'body' => json_encode($body)
-      )
-    );
-  }
+        'product_id' => $first_product['product_id'],
+        'quantity' => $first_product['quantity'],
+        );
 
-  private function patch($path, $body)
-  {
-    return wp_remote_request(
-      $this->get_base_url() . $path,
-      array(
-        'method' => 'PATCH',
-        'headers' => array(
-          'Authorization' => 'Bearer ' . $this->api_key,
-          'Content-Type' => 'application/json',
-        ),
-        'body' => json_encode($body),
-      )
-    );
-  }
+        // Add discount if provided
+        if ($dodo_discount_code) {
+            $request['discount_code'] = $dodo_discount_code;
+        }
 
-  private function get_base_url()
-  {
-    return $this->testmode ? 'https://test.dodopayments.com' : 'https://live.dodopayments.com';
-  }
+        // Add payment link and return URL for checkout flow
+        if ($return_url) {
+            $request['payment_link'] = true;
+            $request['return_url'] = $return_url;
+        }
+
+        // Add on-demand subscription configuration if mandate_only is true
+        if ($mandate_only) {
+            $request['on_demand'] = array(
+            'mandate_only' => true,
+            );
+        }
+
+        $res = $this->post('/subscriptions', $request);
+
+        if (is_wp_error($res)) {
+            throw new Exception("Failed to create subscription: " . esc_html($res->get_error_message()));
+        }
+
+        if (wp_remote_retrieve_response_code($res) !== 200) {
+            throw new Exception("Failed to create subscription: " . esc_html($res['body']));
+        }
+
+        return json_decode($res['body'], true);
+    }
+
+    /**
+     * Gets a subscription from the Dodo Payments API
+     *
+     * @param string $dodo_subscription_id
+     * @return array|false
+     */
+    public function get_subscription($dodo_subscription_id)
+    {
+        $res = $this->get("/subscriptions/{$dodo_subscription_id}");
+
+        if (is_wp_error($res)) {
+            error_log("Dodo Payments: Failed to get subscription ($dodo_subscription_id): " . $res->get_error_message());
+            return false;
+        }
+
+        if (wp_remote_retrieve_response_code($res) === 404) {
+            error_log("Dodo Payments: Subscription ($dodo_subscription_id) not found: " . $res['body']);
+            return false;
+        }
+
+        return json_decode($res['body'], true);
+    }
+
+    /**
+     * Cancels a subscription in the Dodo Payments API
+     *
+     * @param string $dodo_subscription_id
+     * @throws \Exception
+     * @return void
+     */
+    public function cancel_subscription($dodo_subscription_id)
+    {
+        $body = array(
+        'status' => 'cancelled'
+        );
+
+        $res = $this->patch("/subscriptions/{$dodo_subscription_id}", $body);
+
+        if (is_wp_error($res)) {
+            throw new Exception("Failed to cancel subscription: " . esc_html($res->get_error_message()));
+        }
+
+        if (wp_remote_retrieve_response_code($res) !== 200) {
+            throw new Exception("Failed to cancel subscription: " . esc_html($res['body']));
+        }
+
+        return;
+    }
+
+    /**
+     * Pauses a subscription in the Dodo Payments API
+     *
+     * @param string $dodo_subscription_id
+     * @throws \Exception
+     * @return void
+     */
+    public function pause_subscription($dodo_subscription_id)
+    {
+        $body = array(
+        'status' => 'paused'
+        );
+
+        $res = $this->patch("/subscriptions/{$dodo_subscription_id}", $body);
+
+        if (is_wp_error($res)) {
+            throw new Exception("Failed to pause subscription: " . esc_html($res->get_error_message()));
+        }
+
+        if (wp_remote_retrieve_response_code($res) !== 200) {
+            throw new Exception("Failed to pause subscription: " . esc_html($res['body']));
+        }
+
+        return;
+    }
+
+    /**
+     * Resumes a subscription in the Dodo Payments API
+     *
+     * @param string $dodo_subscription_id
+     * @throws \Exception
+     * @return void
+     */
+    public function resume_subscription($dodo_subscription_id)
+    {
+        $body = array(
+        'status' => 'active'
+        );
+
+        $res = $this->patch("/subscriptions/{$dodo_subscription_id}", $body);
+
+        if (is_wp_error($res)) {
+            throw new Exception("Failed to resume subscription: " . esc_html($res->get_error_message()));
+        }
+
+        if (wp_remote_retrieve_response_code($res) !== 200) {
+            throw new Exception("Failed to resume subscription: " . esc_html($res['body']));
+        }
+
+        return;
+    }
+
+    /**
+     * Converts WooCommerce period to Dodo Payments interval format
+     *
+     * @param string $wc_period
+     * @return string
+     */
+    private static function convert_wc_period_to_dodo($wc_period)
+    {
+        switch ($wc_period) {
+            case 'day':
+                return 'Day';
+            case 'week':
+                return 'Week';
+            case 'month':
+                return 'Month';
+            case 'year':
+                return 'Year';
+            default:
+                return 'Month'; // Default to month if unknown
+        }
+    }
+
+    private function get($path)
+    {
+        return wp_remote_get(
+            $this->get_base_url() . $path,
+            array(
+            'headers' => array(
+            'Authorization' => 'Bearer ' . $this->api_key,
+            ),
+            )
+        );
+    }
+
+    private function post($path, $body)
+    {
+        return wp_remote_post(
+            $this->get_base_url() . $path,
+            array(
+            'headers' => array(
+            'Authorization' => 'Bearer ' . $this->api_key,
+            'Content-Type' => 'application/json',
+            ),
+            'body' => json_encode($body),
+            )
+        );
+    }
+
+    private function put($path, $body)
+    {
+        return wp_remote_request(
+            $this->get_base_url() . $path,
+            array(
+            'method' => 'PUT',
+            'headers' => array(
+            'Authorization' => 'Bearer ' . $this->api_key,
+            'Content-Type' => 'application/json',
+            ),
+            'body' => json_encode($body)
+            )
+        );
+    }
+
+    private function patch($path, $body)
+    {
+        return wp_remote_request(
+            $this->get_base_url() . $path,
+            array(
+            'method' => 'PATCH',
+            'headers' => array(
+            'Authorization' => 'Bearer ' . $this->api_key,
+            'Content-Type' => 'application/json',
+            ),
+            'body' => json_encode($body),
+            )
+        );
+    }
+
+    private function get_base_url()
+    {
+        return $this->testmode ? 'https://test.dodopayments.com' : 'https://live.dodopayments.com';
+    }
 }

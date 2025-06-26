@@ -4,7 +4,7 @@
  * Plugin Name: Dodo Payments for WooCommerce
  * Plugin URI: https://dodopayments.com
  * Description: Dodo Payments plugin for WooCommerce. Accept payments from your customers using Dodo Payments.
- * Version: 0.2.5
+ * Version: 0.3.0
  * Author: Dodo Payments
  * Developer: Dodo Payments
  * Text Domain: dodo-payments-for-woocommerce
@@ -32,6 +32,7 @@ if (!in_array('woocommerce/woocommerce.php', apply_filters('active_plugins', get
 require_once plugin_dir_path(__FILE__) . 'includes/class-dodo-payments-product-db.php';
 require_once plugin_dir_path(__FILE__) . 'includes/class-dodo-payments-payment-db.php';
 require_once plugin_dir_path(__FILE__) . 'includes/class-dodo-payments-coupon-db.php';
+require_once plugin_dir_path(__FILE__) . 'includes/class-dodo-payments-subscription-db.php';
 
 require_once plugin_dir_path(__FILE__) . 'includes/class-dodo-payments-api.php';
 require_once plugin_dir_path(__FILE__) . 'includes/class-dodo-standard-webhook.php';
@@ -40,6 +41,7 @@ register_activation_hook(__FILE__, function () {
     Dodo_Payments_Product_DB::create_table();
     Dodo_Payments_Payment_DB::create_table();
     Dodo_Payments_Coupon_DB::create_table();
+    Dodo_Payments_Subscription_DB::create_table();
 });
 
 // Make the plugin HPOS compatible
@@ -76,6 +78,17 @@ function dodo_payments_init()
                 $this->method_title = __('Dodo Payments', 'dodo-payments-for-woocommerce');
                 $this->method_description = __('Accept payments via Dodo Payments.', 'dodo-payments-for-woocommerce');
 
+                // Declare subscription support
+                $this->supports = array(
+                    'products',
+                    'subscriptions',
+                    'subscription_cancellation',
+                    'subscription_suspension',
+                    'subscription_reactivation',
+                    'subscription_amount_changes',
+                    'subscription_date_changes',
+                );
+
                 $this->enabled = $this->get_option('enabled');
                 $this->title = $this->get_option('title');
                 $this->description = $this->get_option('description');
@@ -99,6 +112,13 @@ function dodo_payments_init()
 
                 // webhook to http://<site-host>/wc-api/dodo_payments
                 add_action('woocommerce_api_' . $this->id, array($this, 'webhook'));
+
+                // Subscription-related actions
+                if (class_exists('WC_Subscriptions')) {
+                    add_action('woocommerce_subscription_cancelled_' . $this->id, array($this, 'cancel_subscription'));
+                    add_action('woocommerce_subscription_put_on-hold_' . $this->id, array($this, 'suspend_subscription'));
+                    add_action('woocommerce_subscription_activated_' . $this->id, array($this, 'reactivate_subscription'));
+                }
             }
 
             private function init_dodo_payments_api()
@@ -245,6 +265,9 @@ function dodo_payments_init()
 
             public function do_payment($order)
             {
+                // Check if order contains subscription products
+                $contains_subscription = $this->order_contains_subscription($order);
+
                 try {
                     $synced_products = $this->sync_products($order);
 
@@ -283,12 +306,21 @@ function dodo_payments_init()
                         }
                     }
 
-                    $payment = $this->dodo_payments_api->create_payment(
-                        $order,
-                        $synced_products,
-                        $dodo_discount_code,
-                        $this->get_return_url($order)
-                    );
+                    if ($contains_subscription) {
+                        $response = $this->dodo_payments_api->create_subscription(
+                            $order,
+                            $synced_products,
+                            $dodo_discount_code,
+                            $this->get_return_url($order)
+                        );
+                    } else {
+                        $response = $this->dodo_payments_api->create_payment(
+                            $order,
+                            $synced_products,
+                            $dodo_discount_code,
+                            $this->get_return_url($order)
+                        );
+                    }
                 } catch (Exception $e) {
                     $order->add_order_note(
                         sprintf(
@@ -301,27 +333,57 @@ function dodo_payments_init()
                     return array('result' => 'failure');
                 }
 
-                if (isset($payment['payment_link']) && isset($payment['payment_id'])) {
-                    // Save the payment mapping
-                    Dodo_Payments_Payment_DB::save_mapping($order->get_id(), $payment['payment_id']);
+                // Handle both payment and subscription responses
+                if ($contains_subscription) {
+                    if (isset($response['payment_link']) && isset($response['subscription_id'])) {
+                        // Save the subscription mapping
+                        $subscription_order = wcs_get_subscriptions_for_order($order->get_id());
+                        if (!empty($subscription_order)) {
+                            $subscription = reset($subscription_order);
+                            Dodo_Payments_Subscription_DB::save_mapping($subscription->get_id(), $response['subscription_id']);
 
-                    $order->add_order_note(
-                        sprintf(
-                            // translators: %1$s: Payment ID
-                            __('Payment created in Dodo Payments: %1$s', 'dodo-payments-for-woocommerce'),
-                            $payment['payment_id']
-                        )
-                    );
+                            $order->add_order_note(
+                                sprintf(
+                                    // translators: %1$s: Subscription ID
+                                    __('Subscription created in Dodo Payments: %1$s', 'dodo-payments-for-woocommerce'),
+                                    $response['subscription_id']
+                                )
+                            );
+                        }
 
-                    return array(
-                        'result' => 'success',
-                        'redirect' => $payment['payment_link']
-                    );
+                        return array(
+                            'result' => 'success',
+                            'redirect' => $response['payment_link']
+                        );
+                    } else {
+                        $order->add_order_note(
+                            __('Failed to create subscription in Dodo Payments: Invalid response', 'dodo-payments-for-woocommerce')
+                        );
+                        return array('result' => 'failure');
+                    }
                 } else {
-                    $order->add_order_note(
-                        __('Failed to create payment in Dodo Payments: Invalid response', 'dodo-payments-for-woocommerce')
-                    );
-                    return array('result' => 'failure');
+                    if (isset($response['payment_link']) && isset($response['payment_id'])) {
+                        // Save the payment mapping
+                        Dodo_Payments_Payment_DB::save_mapping($order->get_id(), $response['payment_id']);
+
+                        $order->add_order_note(
+                            sprintf(
+                                // translators: %1$s: Payment ID
+                                __('Payment created in Dodo Payments: %1$s', 'dodo-payments-for-woocommerce'),
+                                $response['payment_id']
+                            )
+                        );
+
+                        return array(
+                            'result' => 'success',
+                            'redirect' => $response['payment_link']
+                        );
+                    } else {
+                        $order->add_order_note(
+                            __('Failed to create payment in Dodo Payments: Invalid response', 'dodo-payments-for-woocommerce')
+                        );
+                        return array('result' => 'failure');
+                    }
                 }
             }
 
@@ -342,6 +404,12 @@ function dodo_payments_init()
                     $product = $item->get_product();
                     $local_product_id = $product->get_id();
 
+                    // Check if this is a subscription product
+                    $is_subscription = false;
+                    if (class_exists('WC_Subscriptions_Product') && WC_Subscriptions_Product::is_subscription($product)) {
+                        $is_subscription = true;
+                    }
+
                     // Check if product is already mapped
                     $dodo_product_id = Dodo_Payments_Product_DB::get_dodo_product_id($local_product_id);
                     $dodo_product = null;
@@ -351,7 +419,11 @@ function dodo_payments_init()
 
                         if (!!$dodo_product) {
                             try {
-                                $this->dodo_payments_api->update_product($dodo_product['product_id'], $product);
+                                if ($is_subscription) {
+                                    $this->dodo_payments_api->update_subscription_product($dodo_product['product_id'], $product);
+                                } else {
+                                    $this->dodo_payments_api->update_product($dodo_product['product_id'], $product);
+                                }
                             } catch (Exception $e) {
                                 $order->add_order_note(
                                     sprintf(
@@ -368,7 +440,11 @@ function dodo_payments_init()
 
                     if (!$dodo_product_id || !$dodo_product) {
                         try {
-                            $response_body = $this->dodo_payments_api->create_product($product);
+                            if ($is_subscription) {
+                                $response_body = $this->dodo_payments_api->create_subscription_product($product);
+                            } else {
+                                $response_body = $this->dodo_payments_api->create_product($product);
+                            }
                         } catch (Exception $e) {
                             $order->add_order_note(
                                 sprintf(
@@ -498,6 +574,140 @@ function dodo_payments_init()
                 return $this->testmode ? 'https://test.dodopayments.com' : 'https://live.dodopayments.com';
             }
 
+            /**
+             * Cancels a subscription when cancelled in WooCommerce
+             *
+             * @param WC_Subscription $subscription
+             * @return void
+             * @since 0.3.0
+             */
+            public function cancel_subscription($subscription)
+            {
+                $dodo_subscription_id = Dodo_Payments_Subscription_DB::get_dodo_subscription_id($subscription->get_id());
+
+                if (!$dodo_subscription_id) {
+                    $subscription->add_order_note(__('No Dodo Payments subscription ID found for cancellation.', 'dodo-payments-for-woocommerce'));
+                    return;
+                }
+
+                try {
+                    $this->dodo_payments_api->cancel_subscription($dodo_subscription_id);
+                    $subscription->add_order_note(
+                        sprintf(
+                            // translators: %1$s: Subscription ID
+                            __('Subscription cancelled in Dodo Payments: %1$s', 'dodo-payments-for-woocommerce'),
+                            $dodo_subscription_id
+                        )
+                    );
+                } catch (Exception $e) {
+                    $subscription->add_order_note(
+                        sprintf(
+                            // translators: %1$s: Error message
+                            __('Failed to cancel subscription in Dodo Payments: %1$s', 'dodo-payments-for-woocommerce'),
+                            $e->getMessage()
+                        )
+                    );
+                }
+            }
+
+            /**
+             * Suspends a subscription when put on hold in WooCommerce
+             *
+             * @param WC_Subscription $subscription
+             * @return void
+             * @since 0.3.0
+             */
+            public function suspend_subscription($subscription)
+            {
+                $dodo_subscription_id = Dodo_Payments_Subscription_DB::get_dodo_subscription_id($subscription->get_id());
+
+                if (!$dodo_subscription_id) {
+                    $subscription->add_order_note(__('No Dodo Payments subscription ID found for suspension.', 'dodo-payments-for-woocommerce'));
+                    return;
+                }
+
+                try {
+                    $this->dodo_payments_api->pause_subscription($dodo_subscription_id);
+                    $subscription->add_order_note(
+                        sprintf(
+                            // translators: %1$s: Subscription ID
+                            __('Subscription paused in Dodo Payments: %1$s', 'dodo-payments-for-woocommerce'),
+                            $dodo_subscription_id
+                        )
+                    );
+                } catch (Exception $e) {
+                    $subscription->add_order_note(
+                        sprintf(
+                            // translators: %1$s: Error message
+                            __('Failed to pause subscription in Dodo Payments: %1$s', 'dodo-payments-for-woocommerce'),
+                            $e->getMessage()
+                        )
+                    );
+                }
+            }
+
+            /**
+             * Reactivates a subscription when activated in WooCommerce
+             *
+             * @param WC_Subscription $subscription
+             * @return void
+             * @since 0.3.0
+             */
+            public function reactivate_subscription($subscription)
+            {
+                $dodo_subscription_id = Dodo_Payments_Subscription_DB::get_dodo_subscription_id($subscription->get_id());
+
+                if (!$dodo_subscription_id) {
+                    $subscription->add_order_note(__('No Dodo Payments subscription ID found for reactivation.', 'dodo-payments-for-woocommerce'));
+                    return;
+                }
+
+                try {
+                    $this->dodo_payments_api->resume_subscription($dodo_subscription_id);
+                    $subscription->add_order_note(
+                        sprintf(
+                            // translators: %1$s: Subscription ID
+                            __('Subscription resumed in Dodo Payments: %1$s', 'dodo-payments-for-woocommerce'),
+                            $dodo_subscription_id
+                        )
+                    );
+                } catch (Exception $e) {
+                    $subscription->add_order_note(
+                        sprintf(
+                            // translators: %1$s: Error message
+                            __('Failed to resume subscription in Dodo Payments: %1$s', 'dodo-payments-for-woocommerce'),
+                            $e->getMessage()
+                        )
+                    );
+                }
+            }
+
+            /**
+             * Utility method to check if an order contains subscription products
+             *
+             * @param WC_Order $order
+             * @return bool
+             * @since 0.3.0
+             */
+            private function order_contains_subscription($order)
+            {
+                if (function_exists('wcs_order_contains_subscription')) {
+                    return wcs_order_contains_subscription($order);
+                }
+
+                // Fallback check for subscription products
+                if (class_exists('WC_Subscriptions_Product')) {
+                    foreach ($order->get_items() as $item) {
+                        $product = $item->get_product();
+                        if ($product && WC_Subscriptions_Product::is_subscription($product)) {
+                            return true;
+                        }
+                    }
+                }
+
+                return false;
+            }
+
             public function webhook()
             {
                 $headers = [
@@ -538,8 +748,12 @@ function dodo_payments_init()
                 // subscription.expired,
                 // license_key.created
                 $type = $payload['type'];
+                $type_parts = explode('.', $type);
 
-                if (substr($type, 0, 7) === 'payment') {
+                $kind = $type_parts[0];
+                $status = $type_parts[1];
+
+                if ($kind === 'payment') {
                     $payment_id = $payload['data']['payment_id'];
                     $order_id = Dodo_Payments_Payment_DB::get_order_id($payment_id);
 
@@ -586,7 +800,7 @@ function dodo_payments_init()
                     }
                 }
 
-                if (substr($type, 0, 6) === 'refund') {
+                if ($kind === 'refund') {
                     $payment_id = $payload['data']['payment_id'];
                     $order_id = Dodo_Payments_Payment_DB::get_order_id($payment_id);
 
@@ -629,6 +843,73 @@ function dodo_payments_init()
                                     __('Refund failed in Dodo Payments. Payment ID: %$1s, Refund ID: %2$s', 'dodo-payments-for-woocommerce'),
                                     $payment_id,
                                     $payload['data']['refund_id']
+                                )
+                            );
+                            break;
+                    }
+                }
+
+                if ($kind === 'subscription' && class_exists('WC_Subscriptions')) {
+                    $subscription_id = $payload['data']['subscription_id'];
+                    $wc_subscription_id = Dodo_Payments_Subscription_DB::get_wc_subscription_id($subscription_id);
+
+                    if (!$wc_subscription_id) {
+                        error_log('Dodo Payments: Could not find WooCommerce subscription for Dodo subscription: ' . $subscription_id);
+
+                        // Silently consume the webhook event
+                        status_header(200);
+                        return;
+                    }
+
+                    $subscription = wcs_get_subscription($wc_subscription_id);
+
+                    if (!$subscription) {
+                        error_log('Dodo Payments: Could not find WooCommerce subscription: ' . $wc_subscription_id);
+
+                        // Silently consume the webhook event
+                        status_header(200);
+                        return;
+                    }
+
+                    switch ($type) {
+                        case 'subscription.active':
+                            $subscription->update_status('active', __('Subscription activated by Dodo Payments', 'dodo-payments-for-woocommerce'));
+                            break;
+
+                        case 'subscription.renewed':
+                            // Create a renewal order for the subscription
+                            if (function_exists('wcs_create_renewal_order')) {
+                                $renewal_order = wcs_create_renewal_order($subscription);
+                                if ($renewal_order) {
+                                    $renewal_order->payment_complete();
+                                    $subscription->add_order_note(__('Subscription renewed by Dodo Payments', 'dodo-payments-for-woocommerce'));
+                                }
+                            }
+                            break;
+
+                        case 'subscription.on_hold':
+                        case 'subscription.paused':
+                            $subscription->update_status('on-hold', __('Subscription paused by Dodo Payments', 'dodo-payments-for-woocommerce'));
+                            break;
+
+                        case 'subscription.cancelled':
+                            $subscription->update_status('cancelled', __('Subscription cancelled by Dodo Payments', 'dodo-payments-for-woocommerce'));
+                            break;
+
+                        case 'subscription.failed':
+                            $subscription->update_status('on-hold', __('Subscription payment failed in Dodo Payments', 'dodo-payments-for-woocommerce'));
+                            break;
+
+                        case 'subscription.expired':
+                            $subscription->update_status('expired', __('Subscription expired in Dodo Payments', 'dodo-payments-for-woocommerce'));
+                            break;
+
+                        default:
+                            $subscription->add_order_note(
+                                sprintf(
+                                    // translators: %1$s: Webhook type
+                                    __('Subscription webhook received from Dodo Payments: %1$s', 'dodo-payments-for-woocommerce'),
+                                    $type
                                 )
                             );
                             break;
