@@ -4,7 +4,7 @@
  * Plugin Name: Dodo Payments for WooCommerce
  * Plugin URI: https://dodopayments.com
  * Description: Dodo Payments plugin for WooCommerce. Accept payments from your customers using Dodo Payments.
- * Version: 0.2.5
+ * Version: 0.2.3
  * Author: Dodo Payments
  * Developer: Dodo Payments
  * Text Domain: dodo-payments-for-woocommerce
@@ -56,7 +56,7 @@ function dodo_payments_init()
     if (class_exists('WC_Payment_Gateway')) {
         class Dodo_Payments_WC_Gateway extends WC_Payment_Gateway
         {
-            public ?string $instructions;
+            public null|string $instructions;
 
             private bool $testmode;
             private string $api_key;
@@ -187,6 +187,16 @@ function dodo_payments_init()
                         'desc_tip' => false,
                         'description' => __('Your Test Webhook Signing Key. Optional, only required if you want to receive test payments. Generate one from <b>Dodo Payments (Test Mode) &gt; Developer &gt; Webhooks</b>, use the URL at the bottom of this page as the webhook URL.', 'dodo-payments-for-woocommerce'),
                     ),
+                    'api_connection_test' => array(
+                        'title' => __('Test API Connection', 'dodo-payments-for-woocommerce'),
+                        'type' => 'title',
+                        'description' => '<button type="button" class="button-secondary" id="dodo_test_api_connection">' . __('Test API Connection', 'dodo-payments-for-woocommerce') . '</button><span id="dodo_api_connection_result"></span>',
+                    ),
+                    'diagnostics' => array(
+                        'title' => __('Gateway Diagnostics', 'dodo-payments-for-woocommerce'),
+                        'type' => 'title',
+                        'description' => '<button type="button" class="button-secondary" id="dodo_run_diagnostics">' . __('Run Diagnostics', 'dodo-payments-for-woocommerce') . '</button><div id="dodo_diagnostics_result" style="margin-top: 10px;"></div>',
+                    ),
                     'global_tax_category' => array(
                         'title' => __('Global Tax Category', 'dodo-payments-for-woocommerce'),
                         'type' => 'select',
@@ -218,21 +228,17 @@ function dodo_payments_init()
             public function process_payment($order_id)
             {
                 $order = wc_get_order($order_id);
+
                 $order->update_status('pending-payment', __('Awaiting payment via Dodo Payments', 'dodo-payments-for-woocommerce'));
                 wc_reduce_stock_levels($order_id);
 
+                WC()->cart->empty_cart();
+
                 if ($order->get_total() == 0) {
                     $order->payment_complete();
-
-                    WC()->cart->empty_cart();
-                    return array(
-                        'result' => 'success',
-                        'redirect' => $this->get_return_url($order)
-                    );
                 }
 
                 $res = $this->do_payment($order);
-                WC()->cart->empty_cart();
                 return $res;
             }
 
@@ -283,12 +289,7 @@ function dodo_payments_init()
                         }
                     }
 
-                    $payment = $this->dodo_payments_api->create_payment(
-                        $order,
-                        $synced_products,
-                        $dodo_discount_code,
-                        $this->get_return_url($order)
-                    );
+                    $payment = $this->dodo_payments_api->create_payment($order, $synced_products, $dodo_discount_code, $this->get_return_url($order));
                 } catch (Exception $e) {
                     $order->add_order_note(
                         sprintf(
@@ -638,6 +639,58 @@ function dodo_payments_init()
                 status_header(200);
                 return;
             }
+
+            /**
+             * Tests the API connection to ensure credentials are working
+             */
+            public function test_api_connection() {
+                // Verify nonce
+                check_ajax_referer('dodo_test_api_connection', 'security');
+
+                // Check user capabilities
+                if (!current_user_can("manage_woocommerce")) {
+                    wp_die(__("You do not have sufficient permissions to access this page.", "dodo-payments-for-woocommerce"));
+                }
+
+                // Refresh settings from POST data
+                $this->init_settings();
+                $testmode = isset($_POST['testmode']) ? 'yes' === sanitize_text_field(wp_unslash($_POST['testmode'])) : ('yes' === $this->get_option('testmode'));
+                $api_key = $testmode ? 
+                    (isset($_POST['test_api_key']) ? $_POST['test_api_key'] : $this->get_option('test_api_key')) : 
+                    (isset($_POST['live_api_key']) ? $_POST['live_api_key'] : $this->get_option('live_api_key'));
+
+                if (empty($api_key)) {
+                    wp_send_json_error(array(
+                        'message' => __('API key is empty. Please enter an API key.', 'dodo-payments-for-woocommerce')
+                    ));
+                    return;
+                }
+
+                // Set up API with current or form settings
+                $api = new Dodo_Payments_API(array(
+                    'testmode' => $testmode,
+                    'api_key' => $api_key,
+                    'global_tax_category' => isset($_POST['global_tax_category']) ? sanitize_text_field(wp_unslash($_POST['global_tax_category'])) : $this->get_option('global_tax_category'),
+                    'global_tax_inclusive' => isset($_POST['global_tax_inclusive']) ? 'yes' === sanitize_text_field(wp_unslash($_POST['global_tax_inclusive'])) : ('yes' === $this->get_option('global_tax_inclusive')),
+                ));
+
+                // Test the connection
+                $result = $api->test_connection();
+                
+                if (is_wp_error($result)) {
+                    wp_send_json_error(array(
+                        'message' => sprintf(
+                            __('API connection failed: %s', 'dodo-payments-for-woocommerce'),
+                            $result->get_error_message()
+                        )
+                    ));
+                    return;
+                }
+
+                wp_send_json_success(array(
+                    'message' => __('API connection successful! Your Dodo Payments API key is working correctly.', 'dodo-payments-for-woocommerce')
+                ));
+            }
         }
     }
 }
@@ -647,4 +700,552 @@ function dodo_payments_add_gateway_class_to_woo($gateways)
 {
     $gateways[] = 'Dodo_Payments_WC_Gateway';
     return $gateways;
+}
+
+// Add the API test AJAX handler
+add_action('wp_ajax_dodo_test_api_connection', 'dodo_test_api_connection_callback');
+function dodo_test_api_connection_callback() {
+    $gateway = new Dodo_Payments_WC_Gateway();
+    $gateway->test_api_connection();
+}
+
+// Add JavaScript to the admin footer to handle the test button
+add_action('admin_footer', 'dodo_payments_admin_footer_js');
+function dodo_payments_admin_footer_js() {
+    // Only add to the payment methods settings page
+    if (!isset($_GET['page']) || $_GET['page'] !== 'wc-settings' || 
+        !isset($_GET['tab']) || $_GET['tab'] !== 'checkout' ||
+        !isset($_GET['section']) || $_GET['section'] !== 'dodo_payments') {
+        return;
+    }
+    ?>
+    <script type="text/javascript">
+    jQuery(function($) {
+        $('#dodo_test_api_connection').on('click', function() {
+            var $button = $(this);
+            var $result = $('#dodo_api_connection_result');
+            
+            $button.prop('disabled', true);
+            $result.html('<span style="margin-left: 10px; color: #777;">#<?php echo esc_js(__('Testing connection...', 'dodo-payments-for-woocommerce')); ?></span>');
+            
+            var data = {
+                action: 'dodo_test_api_connection',
+                security: '<?php echo esc_js(wp_create_nonce('dodo_test_api_connection')); ?>',
+                testmode: $('#woocommerce_dodo_payments_testmode').is(':checked') ? 'yes' : 'no',
+                test_api_key: $('#woocommerce_dodo_payments_test_api_key').val(),
+                live_api_key: $('#woocommerce_dodo_payments_live_api_key').val(),
+                global_tax_category: $('#woocommerce_dodo_payments_global_tax_category').val(),
+                global_tax_inclusive: $('#woocommerce_dodo_payments_global_tax_inclusive').is(':checked') ? 'yes' : 'no'
+            };
+            
+            $.post(ajaxurl, data, function(response) {
+                $button.prop('disabled', false);
+                
+                if (response.success) {
+                    $result.html('<span style="margin-left: 10px; color: green;">' + response.data.message + '</span>');
+                } else {
+                    $result.html('<span style="margin-left: 10px; color: red;">' + response.data.message + '</span>');
+                }
+            }).fail(function() {
+                $button.prop('disabled', false);
+                $result.html('<span style="margin-left: 10px; color: red;">#<?php echo esc_js(__('Connection test failed. Please try again.', 'dodo-payments-for-woocommerce')); ?></span>');
+            });
+        });
+
+        $('#dodo_run_diagnostics').on('click', function() {
+            var $button = $(this);
+            var $result = $('#dodo_diagnostics_result');
+            
+            $button.prop('disabled', true);
+            $result.html('<div style="color: #777;">#<?php echo esc_js(__('Running diagnostics...', 'dodo-payments-for-woocommerce')); ?></div>');
+            
+            var data = {
+                action: 'dodo_run_diagnostics',
+                security: '<?php echo esc_js(wp_create_nonce('dodo_run_diagnostics')); ?>',
+                testmode: $('#woocommerce_dodo_payments_testmode').is(':checked') ? 'yes' : 'no',
+                test_api_key: $('#woocommerce_dodo_payments_test_api_key').val(),
+                live_api_key: $('#woocommerce_dodo_payments_live_api_key').val()
+            };
+            
+            $.post(ajaxurl, data, function(response) {
+                $button.prop('disabled', false);
+                
+                if (response.success) {
+                    var html = '<div style="border: 1px solid #ddd; padding: 15px; background: #f9f9f9;">';
+                    html += '<h3 style="margin-top: 0;">#<?php echo esc_js(__('Diagnostics Results', 'dodo-payments-for-woocommerce')); ?></h3>';
+                    
+                    // Add results
+                    $.each(response.data.checks, function(index, check) {
+                        var status_color = check.status === 'pass' ? 'green' : (check.status === 'warn' ? 'orange' : 'red');
+                        html += '<div style="margin-bottom: 10px;">';
+                        html += '<div style="font-weight: bold;"><span style="display: inline-block; width: 20px; color: ' + status_color + ';">' + (check.status === 'pass' ? '✓' : (check.status === 'warn' ? '⚠' : '✗')) + '</span> ' + check.title + '</div>';
+                        if (check.message) {
+                            html += '<div style="padding-left: 20px;">' + check.message + '</div>';
+                        }
+                        html += '</div>';
+                    });
+                    
+                    // Add overall status
+                    html += '<div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd;">';
+                    html += '<strong>#<?php echo esc_js(__('Summary:', 'dodo-payments-for-woocommerce')); ?></strong> ' + response.data.summary;
+                    html += '</div>';
+                    
+                    html += '</div>';
+                    $result.html(html);
+                } else {
+                    $result.html('<div style="color: red;">' + response.data.message + '</div>');
+                }
+            }).fail(function() {
+                $button.prop('disabled', false);
+                $result.html('<div style="color: red;">#<?php echo esc_js(__('Diagnostics failed. Please try again.', 'dodo-payments-for-woocommerce')); ?></div>');
+            });
+        });
+    });
+    </script>
+    <?php
+}
+
+// Add diagnostics AJAX handler
+
+        // Check user capabilities
+        if (!current_user_can("manage_woocommerce")) {
+            wp_die(__("You do not have sufficient permissions to access this page.", "dodo-payments-for-woocommerce"));
+        }
+add_action('wp_ajax_dodo_run_diagnostics', 'dodo_run_diagnostics_callback');
+function dodo_run_diagnostics_callback() {
+    try {
+        // Verify nonce
+        check_ajax_referer('dodo_run_diagnostics', 'security');
+        
+        $checks = array();
+        $failed = 0;
+        $warnings = 0;
+        
+        // Check 1: Is the gateway enabled?
+        $gateway_settings = get_option('woocommerce_dodo_payments_settings', array());
+        $is_enabled = isset($gateway_settings['enabled']) && $gateway_settings['enabled'] === 'yes';
+        
+        if ($is_enabled) {
+            $checks[] = array(
+                'title' => __('Gateway Enabled', 'dodo-payments-for-woocommerce'),
+                'status' => 'pass',
+                'message' => __('The Dodo Payments gateway is enabled.', 'dodo-payments-for-woocommerce')
+            );
+        } else {
+            $checks[] = array(
+                'title' => __('Gateway Enabled', 'dodo-payments-for-woocommerce'),
+                'status' => 'fail',
+                'message' => __('The Dodo Payments gateway is disabled. Enable it to make it appear at checkout.', 'dodo-payments-for-woocommerce')
+            );
+            $failed++;
+        }
+        
+        // Check 2: API Keys
+        $testmode = isset($_POST['testmode']) ? sanitize_text_field(wp_unslash($_POST['testmode'])) === 'yes' : (isset($gateway_settings['testmode']) && $gateway_settings['testmode'] === 'yes');
+        $api_key = $testmode ? 
+            (isset($_POST['test_api_key']) && !empty($_POST['test_api_key']) ? sanitize_text_field(wp_unslash($_POST['test_api_key'])) : (isset($gateway_settings['test_api_key']) ? $gateway_settings['test_api_key'] : '')) : 
+            (isset($_POST['live_api_key']) && !empty($_POST['live_api_key']) ? sanitize_text_field(wp_unslash($_POST['live_api_key'])) : (isset($gateway_settings['live_api_key']) ? $gateway_settings['live_api_key'] : ''));
+        
+        if (!empty($api_key)) {
+            $checks[] = array(
+                'title' => __('API Key', 'dodo-payments-for-woocommerce'),
+                'status' => 'pass',
+                'message' => $testmode ? 
+                    __('Test API Key is set.', 'dodo-payments-for-woocommerce') : 
+                    __('Live API Key is set.', 'dodo-payments-for-woocommerce')
+            );
+        } else {
+            $checks[] = array(
+                'title' => __('API Key', 'dodo-payments-for-woocommerce'),
+                'status' => 'fail',
+                'message' => $testmode ? 
+                    __('Test API Key is empty. The gateway will not work without a valid API key.', 'dodo-payments-for-woocommerce') : 
+                    __('Live API Key is empty. The gateway will not work without a valid API key.', 'dodo-payments-for-woocommerce')
+            );
+            $failed++;
+        }
+
+        // Check 2b: Webhook Key
+        $webhook_key = $testmode ? 
+            (isset($gateway_settings['test_webhook_key']) ? $gateway_settings['test_webhook_key'] : '') : 
+            (isset($gateway_settings['live_webhook_key']) ? $gateway_settings['live_webhook_key'] : '');
+        
+        if (!empty($webhook_key)) {
+            $checks[] = array(
+                'title' => __('Webhook Key', 'dodo-payments-for-woocommerce'),
+                'status' => 'pass',
+                'message' => $testmode ? 
+                    __('Test Webhook Key is set.', 'dodo-payments-for-woocommerce') : 
+                    __('Live Webhook Key is set.', 'dodo-payments-for-woocommerce')
+            );
+        } else {
+            $checks[] = array(
+                'title' => __('Webhook Key', 'dodo-payments-for-woocommerce'),
+                'status' => 'warn',
+                'message' => $testmode ? 
+                    __('Test Webhook Key is empty. While not required for the gateway to appear, it is recommended for proper payment status updates.', 'dodo-payments-for-woocommerce') : 
+                    __('Live Webhook Key is empty. While not required for the gateway to appear, it is recommended for proper payment status updates.', 'dodo-payments-for-woocommerce')
+            );
+            $warnings++;
+        }
+        
+        // Check 3: Currency
+        $woocommerce_currency = get_woocommerce_currency();
+        $supported_currencies = array('USD', 'INR', 'EUR', 'GBP', 'CAD', 'AUD'); // Add all currencies supported by Dodo Payments
+        
+        if (in_array($woocommerce_currency, $supported_currencies)) {
+            $checks[] = array(
+                'title' => __('Currency Support', 'dodo-payments-for-woocommerce'),
+                'status' => 'pass',
+                'message' => sprintf(__('Your store currency (%s) is supported by Dodo Payments.', 'dodo-payments-for-woocommerce'), $woocommerce_currency)
+            );
+        } else {
+            $checks[] = array(
+                'title' => __('Currency Support', 'dodo-payments-for-woocommerce'),
+                'status' => 'warn',
+                'message' => sprintf(__('Your store currency (%s) may not be fully supported by Dodo Payments. This could cause the gateway to not appear at checkout.', 'dodo-payments-for-woocommerce'), $woocommerce_currency)
+            );
+            $warnings++;
+        }
+        
+        // Check 4: SSL (recommended for production)
+        $is_ssl = is_ssl();
+        if ($is_ssl || $testmode) {
+            $status = $is_ssl ? 'pass' : 'warn';
+            $message = $is_ssl ? 
+                __('Your site is using SSL/HTTPS, which is recommended for processing payments.', 'dodo-payments-for-woocommerce') : 
+                __('Your site is not using SSL/HTTPS. This is acceptable in test mode, but SSL is strongly recommended for live payments.', 'dodo-payments-for-woocommerce');
+            
+            $checks[] = array(
+                'title' => __('SSL/HTTPS', 'dodo-payments-for-woocommerce'),
+                'status' => $status,
+                'message' => $message
+            );
+            
+            if ($status === 'warn') {
+                $warnings++;
+            }
+        } else {
+            $checks[] = array(
+                'title' => __('SSL/HTTPS', 'dodo-payments-for-woocommerce'),
+                'status' => 'fail',
+                'message' => __('Your site is not using SSL/HTTPS, which is required for processing live payments securely. This could cause the gateway to not appear at checkout.', 'dodo-payments-for-woocommerce')
+            );
+            $failed++;
+        }
+        
+        // Check 5: WooCommerce Version
+        $wc_version = WC()->version;
+        $min_wc_version = '7.9'; // Minimum required WC version from plugin header
+        
+        if (version_compare($wc_version, $min_wc_version, '>=')) {
+            $checks[] = array(
+                'title' => __('WooCommerce Version', 'dodo-payments-for-woocommerce'),
+                'status' => 'pass',
+                'message' => sprintf(__('WooCommerce version %s meets the minimum required version %s.', 'dodo-payments-for-woocommerce'), $wc_version, $min_wc_version)
+            );
+        } else {
+            $checks[] = array(
+                'title' => __('WooCommerce Version', 'dodo-payments-for-woocommerce'),
+                'status' => 'fail',
+                'message' => sprintf(__('WooCommerce version %s does not meet the minimum required version %s. Please update WooCommerce.', 'dodo-payments-for-woocommerce'), $wc_version, $min_wc_version)
+            );
+            $failed++;
+        }
+        
+        // Check 6: Is HPOS (COT) enabled and compatible?
+        if (class_exists('\Automattic\WooCommerce\Utilities\FeaturesUtil')) {
+            // Check if the is_feature_enabled method exists (WooCommerce 6.5+)
+            $is_hpos_enabled = false;
+            $is_plugin_compatible = true; // This plugin declares compatibility
+            
+            if (method_exists('\Automattic\WooCommerce\Utilities\FeaturesUtil', 'is_feature_enabled')) {
+                $is_hpos_enabled = \Automattic\WooCommerce\Utilities\FeaturesUtil::is_feature_enabled('custom_order_tables');
+            } else {
+                // For older WooCommerce versions, HPOS is not available
+                $checks[] = array(
+                    'title' => __('HPOS Compatibility', 'dodo-payments-for-woocommerce'),
+                    'status' => 'pass',
+                    'message' => __('Your WooCommerce version doesn\'t support High-Performance Order Storage yet. No compatibility issues expected.', 'dodo-payments-for-woocommerce')
+                );
+                // Skip the rest of this check
+                goto skip_hpos_check;
+            }
+            
+            if ($is_hpos_enabled) {
+                if ($is_plugin_compatible) {
+                    $checks[] = array(
+                        'title' => __('HPOS Compatibility', 'dodo-payments-for-woocommerce'),
+                        'status' => 'pass',
+                        'message' => __('High-Performance Order Storage is enabled and this plugin is compatible.', 'dodo-payments-for-woocommerce')
+                    );
+                } else {
+                    $checks[] = array(
+                        'title' => __('HPOS Compatibility', 'dodo-payments-for-woocommerce'),
+                        'status' => 'warn',
+                        'message' => __('High-Performance Order Storage is enabled but this plugin has not explicitly declared compatibility. This might cause issues.', 'dodo-payments-for-woocommerce')
+                    );
+                    $warnings++;
+                }
+            } else {
+                $checks[] = array(
+                    'title' => __('HPOS Compatibility', 'dodo-payments-for-woocommerce'),
+                    'status' => 'pass',
+                    'message' => __('High-Performance Order Storage is not enabled. No compatibility issues expected.', 'dodo-payments-for-woocommerce')
+                );
+            }
+        } else {
+            $checks[] = array(
+                'title' => __('HPOS Compatibility', 'dodo-payments-for-woocommerce'),
+                'status' => 'pass',
+                'message' => __('Your WooCommerce version doesn\'t support High-Performance Order Storage. No compatibility issues expected.', 'dodo-payments-for-woocommerce')
+            );
+        }
+        
+        skip_hpos_check:
+        
+        // Check 7: PHP Version
+        $php_version = phpversion();
+        $min_php_version = '7.4'; // From plugin header
+        
+        if (version_compare($php_version, $min_php_version, '>=')) {
+            $checks[] = array(
+                'title' => __('PHP Version', 'dodo-payments-for-woocommerce'),
+                'status' => 'pass',
+                'message' => sprintf(__('PHP version %s meets the minimum required version %s.', 'dodo-payments-for-woocommerce'), $php_version, $min_php_version)
+            );
+        } else {
+            $checks[] = array(
+                'title' => __('PHP Version', 'dodo-payments-for-woocommerce'),
+                'status' => 'fail',
+                'message' => sprintf(__('PHP version %s does not meet the minimum required version %s. Please update PHP.', 'dodo-payments-for-woocommerce'), $php_version, $min_php_version)
+            );
+            $failed++;
+        }
+
+        // Check 8: Active Payment Gateways
+        $available_gateways = WC()->payment_gateways->get_available_payment_gateways();
+        $is_dodo_registered = false;
+        $gateway_list = '';
+        
+        foreach (WC()->payment_gateways->payment_gateways() as $gateway) {
+            if ($gateway->id === 'dodo_payments') {
+                $is_dodo_registered = true;
+                break;
+            }
+        }
+        
+        if ($is_dodo_registered) {
+            $checks[] = array(
+                'title' => __('Gateway Registration', 'dodo-payments-for-woocommerce'),
+                'status' => 'pass',
+                'message' => __('Dodo Payments gateway is properly registered with WooCommerce.', 'dodo-payments-for-woocommerce')
+            );
+            
+            // Now check if it's available at checkout
+            $is_available = isset($available_gateways['dodo_payments']);
+            
+            if ($is_available) {
+                $checks[] = array(
+                    'title' => __('Gateway Availability', 'dodo-payments-for-woocommerce'),
+                    'status' => 'pass',
+                    'message' => __('Dodo Payments gateway is available for checkout.', 'dodo-payments-for-woocommerce')
+                );
+            } else {
+                $checks[] = array(
+                    'title' => __('Gateway Availability', 'dodo-payments-for-woocommerce'),
+                    'status' => 'fail',
+                    'message' => __('Dodo Payments gateway is registered but not available at checkout. This could be due to payment gateway restrictions or conditions.', 'dodo-payments-for-woocommerce')
+                );
+                $failed++;
+                
+                // Add additional diagnostic info about available gateways
+                $available_gateway_ids = array_keys($available_gateways);
+                if (!empty($available_gateway_ids)) {
+                    $gateway_list = implode(', ', $available_gateway_ids);
+                    $checks[] = array(
+                        'title' => __('Available Gateways', 'dodo-payments-for-woocommerce'),
+                        'status' => 'warn',
+                        'message' => sprintf(__('Currently available gateways: %s', 'dodo-payments-for-woocommerce'), $gateway_list)
+                    );
+                    $warnings++;
+                } else {
+                    $checks[] = array(
+                        'title' => __('Available Gateways', 'dodo-payments-for-woocommerce'),
+                        'status' => 'warn',
+                        'message' => __('No payment gateways are currently available at checkout. This might indicate a more general issue with WooCommerce payments.', 'dodo-payments-for-woocommerce')
+                    );
+                    $warnings++;
+                }
+            }
+        } else {
+            $checks[] = array(
+                'title' => __('Gateway Registration', 'dodo-payments-for-woocommerce'),
+                'status' => 'fail',
+                'message' => __('Dodo Payments gateway is not properly registered with WooCommerce. This is a critical issue.', 'dodo-payments-for-woocommerce')
+            );
+            $failed++;
+        }
+
+        // Check 9: Check if the current cart contains products that might affect payment gateway availability
+        if (WC()->cart && !WC()->cart->is_empty()) {
+            $has_virtual_products = false;
+            $has_subscription_products = false;
+            $has_physical_products = false;
+            
+            foreach (WC()->cart->get_cart() as $cart_item) {
+                $product = $cart_item['data'];
+                
+                if ($product->is_virtual()) {
+                    $has_virtual_products = true;
+                } else {
+                    $has_physical_products = true;
+                }
+                
+                // Check for subscription products if WooCommerce Subscriptions is active
+                if (class_exists('WC_Subscriptions') && $product->is_type(array('subscription', 'subscription_variation', 'variable-subscription'))) {
+                    $has_subscription_products = true;
+                }
+            }
+            
+            $cart_info = array();
+            if ($has_virtual_products) $cart_info[] = __('virtual products', 'dodo-payments-for-woocommerce');
+            if ($has_physical_products) $cart_info[] = __('physical products', 'dodo-payments-for-woocommerce');
+            if ($has_subscription_products) $cart_info[] = __('subscription products', 'dodo-payments-for-woocommerce');
+            
+            $cart_info_str = implode(', ', $cart_info);
+            
+            $checks[] = array(
+                'title' => __('Cart Contents', 'dodo-payments-for-woocommerce'),
+                'status' => 'info',
+                'message' => sprintf(__('Your cart contains: %s', 'dodo-payments-for-woocommerce'), $cart_info_str)
+            );
+            
+            if ($has_virtual_products && !$has_physical_products) {
+                $checks[] = array(
+                    'title' => __('Virtual Products', 'dodo-payments-for-woocommerce'),
+                    'status' => 'info',
+                    'message' => __('Your cart contains only virtual products. Some payment gateways behave differently with virtual-only orders.', 'dodo-payments-for-woocommerce')
+                );
+            }
+            
+            if ($has_subscription_products) {
+                $checks[] = array(
+                    'title' => __('Subscription Products', 'dodo-payments-for-woocommerce'),
+                    'status' => 'warn',
+                    'message' => __('Your cart contains subscription products. Dodo Payments needs to be explicitly configured to support subscriptions.', 'dodo-payments-for-woocommerce')
+                );
+                $warnings++;
+            }
+        } else {
+            $checks[] = array(
+                'title' => __('Cart Contents', 'dodo-payments-for-woocommerce'),
+                'status' => 'warn',
+                'message' => __('Your cart is empty. Add products to your cart to test gateway availability at checkout.', 'dodo-payments-for-woocommerce')
+            );
+            $warnings++;
+        }
+        
+        // Generate summary
+        $summary = '';
+        if ($failed > 0) {
+            $summary = sprintf(
+                _n(
+                    '%d critical issue found that will prevent the gateway from working properly.', 
+                    '%d critical issues found that will prevent the gateway from working properly.', 
+                    $failed, 
+                    'dodo-payments-for-woocommerce'
+                ),
+                $failed
+            );
+        } else if ($warnings > 0) {
+            $summary = sprintf(
+                _n(
+                    '%d warning found. The gateway should work but there might be issues.', 
+                    '%d warnings found. The gateway should work but there might be issues.', 
+                    $warnings, 
+                    'dodo-payments-for-woocommerce'
+                ),
+                $warnings
+            );
+        } else {
+            $summary = __('All checks passed! The gateway should be working correctly.', 'dodo-payments-for-woocommerce');
+        }
+
+        // Add troubleshooting tips
+        $troubleshooting_tips = array(
+            __('1. Make sure the gateway is enabled in WooCommerce → Settings → Payments.', 'dodo-payments-for-woocommerce'),
+            __('2. Verify you have entered valid API keys for the selected mode (Test/Live).', 'dodo-payments-for-woocommerce'),
+            __('3. Check if your store currency is supported by Dodo Payments.', 'dodo-payments-for-woocommerce'),
+            __('4. Try adding a simple physical product to your cart to test checkout.', 'dodo-payments-for-woocommerce'),
+            __('5. Disable other payment gateways temporarily to see if there are conflicts.', 'dodo-payments-for-woocommerce'),
+            __('6. Clear your browser cache and cookies, then try again.', 'dodo-payments-for-woocommerce'),
+            __('7. Temporarily deactivate all other plugins to check for conflicts.', 'dodo-payments-for-woocommerce'),
+        );
+        
+        wp_send_json_success(array(
+            'checks' => $checks,
+            'summary' => $summary,
+            'failed' => $failed,
+            'warnings' => $warnings,
+            'troubleshooting_tips' => $troubleshooting_tips
+        ));
+    } catch (Exception $e) {
+        // Log the error for debugging
+        error_log('Dodo Payments Diagnostics Error: ' . $e->getMessage() . ' in ' . $e->getFile() . ' on line ' . $e->getLine());
+        
+        wp_send_json_error(array(
+            'message' => 'Diagnostics encountered an error: ' . $e->getMessage()
+        ));
+    } catch (Error $e) {
+        // For PHP 7+ to catch fatal errors
+        error_log('Dodo Payments Diagnostics Fatal Error: ' . $e->getMessage() . ' in ' . $e->getFile() . ' on line ' . $e->getLine());
+        
+        wp_send_json_error(array(
+            'message' => 'Diagnostics encountered a fatal error: ' . $e->getMessage()
+        ));
+    }
+}
+
+// Add a hook to debug why the gateway isn't showing at checkout
+add_filter('woocommerce_available_payment_gateways', 'dodo_debug_available_payment_gateways', 999);
+function dodo_debug_available_payment_gateways($available_gateways) {
+    // Only log when WP_DEBUG is enabled
+    if (defined('WP_DEBUG') && WP_DEBUG) {
+        $all_gateways = WC()->payment_gateways->payment_gateways();
+        $dodo_gateway = isset($all_gateways['dodo_payments']) ? $all_gateways['dodo_payments'] : null;
+        
+        if (!$dodo_gateway) {
+            error_log('Dodo Payments Debug: Gateway not registered properly');
+            return $available_gateways;
+        }
+        
+        if (!isset($available_gateways['dodo_payments'])) {
+            $is_enabled = $dodo_gateway->enabled === 'yes';
+            $api_key = $dodo_gateway->testmode ? $dodo_gateway->get_option('test_api_key') : $dodo_gateway->get_option('live_api_key');
+            $has_api_key = !empty($api_key);
+            
+            error_log(sprintf(
+                'Dodo Payments Debug: Gateway not available at checkout. Enabled: %s, Has API Key: %s',
+                $is_enabled ? 'Yes' : 'No',
+                $has_api_key ? 'Yes' : 'No'
+            ));
+            
+            // Log additional information that might be helpful
+            if (WC()->cart) {
+                $cart_total = WC()->cart->get_total('');
+                $is_cart_empty = WC()->cart->is_empty();
+                $has_virtual_only = WC()->cart->needs_shipping() === false && !$is_cart_empty;
+                
+                error_log(sprintf(
+                    'Dodo Payments Debug: Cart info - Total: %s, Empty: %s, Virtual Only: %s',
+                    $cart_total,
+                    $is_cart_empty ? 'Yes' : 'No',
+                    $has_virtual_only ? 'Yes' : 'No'
+                ));
+            }
+        }
+    }
+    
+    return $available_gateways;
 }
