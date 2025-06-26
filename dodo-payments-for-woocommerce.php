@@ -53,6 +53,11 @@ add_action('before_woocommerce_init', function () {
 
 add_action('plugins_loaded', 'dodo_payments_init');
 
+/**
+ * Initializes the Dodo Payments payment gateway for WooCommerce.
+ *
+ * Registers the Dodo Payments gateway class if WooCommerce is active, enabling support for standard payments and subscriptions, including subscription lifecycle management and webhook handling.
+ */
 function dodo_payments_init()
 {
     if (class_exists('WC_Payment_Gateway')) {

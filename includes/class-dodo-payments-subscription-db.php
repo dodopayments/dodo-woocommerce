@@ -10,10 +10,11 @@ class Dodo_Payments_Subscription_DB
   private static string $table_name = 'dodo_payments_subscription_mappings';
 
   /**
-   * Creates the subscription mappings table
+   * Creates the database table for mapping WooCommerce subscription IDs to Dodo Payments subscription IDs.
+   *
+   * The table includes unique constraints on both subscription ID columns and a timestamp for record creation.
    *
    * @return void
-   * @since 0.3.0
    */
   public static function create_table()
   {
@@ -38,12 +39,12 @@ class Dodo_Payments_Subscription_DB
   }
 
   /**
-   * Saves the mapping between WooCommerce subscription and Dodo Payments subscription
+   * Inserts or updates the mapping between a WooCommerce subscription ID and a Dodo Payments subscription ID.
    *
-   * @param int $wc_subscription_id WooCommerce subscription ID
-   * @param string $dodo_subscription_id Dodo Payments subscription ID
-   * @return void
-   * @since 0.3.0
+   * If a mapping for the given WooCommerce subscription ID already exists, it is updated; otherwise, a new mapping is created.
+   *
+   * @param int $wc_subscription_id The WooCommerce subscription ID to map.
+   * @param string $dodo_subscription_id The corresponding Dodo Payments subscription ID.
    */
   public static function save_mapping($wc_subscription_id, $dodo_subscription_id)
   {
@@ -65,11 +66,10 @@ class Dodo_Payments_Subscription_DB
   }
 
   /**
-   * Gets the Dodo Payments subscription ID for a WooCommerce subscription
+   * Retrieves the Dodo Payments subscription ID associated with a given WooCommerce subscription ID.
    *
-   * @param int $wc_subscription_id WooCommerce subscription ID
-   * @return string|null Dodo Payments subscription ID or null if not found
-   * @since 0.3.0
+   * @param int $wc_subscription_id The WooCommerce subscription ID to look up.
+   * @return string|null The corresponding Dodo Payments subscription ID, or null if no mapping exists.
    */
   public static function get_dodo_subscription_id($wc_subscription_id)
   {
@@ -86,11 +86,10 @@ class Dodo_Payments_Subscription_DB
   }
 
   /**
-   * Gets the WooCommerce subscription ID for a Dodo Payments subscription
+   * Retrieves the WooCommerce subscription ID associated with a given Dodo Payments subscription ID.
    *
-   * @param string $dodo_subscription_id Dodo Payments subscription ID
-   * @return int|null WooCommerce subscription ID or null if not found
-   * @since 0.3.0
+   * @param string $dodo_subscription_id The Dodo Payments subscription ID to look up.
+   * @return int|null The corresponding WooCommerce subscription ID, or null if no mapping exists.
    */
   public static function get_wc_subscription_id($dodo_subscription_id)
   {
@@ -106,12 +105,10 @@ class Dodo_Payments_Subscription_DB
     return $result ? (int) $result : null;
   }
 
-  /**
-   * Deletes the mapping for a WooCommerce subscription
+  /****
+   * Removes the mapping entry for the specified WooCommerce subscription ID from the database.
    *
-   * @param int $wc_subscription_id WooCommerce subscription ID
-   * @return void
-   * @since 0.3.0
+   * @param int $wc_subscription_id The WooCommerce subscription ID whose mapping should be deleted.
    */
   public static function delete_mapping($wc_subscription_id)
   {

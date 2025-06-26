@@ -16,7 +16,9 @@ class Dodo_Payments_API
     private bool $global_tax_inclusive;
 
     /**
-     * @param array{testmode: bool, api_key: string, global_tax_category: string, global_tax_inclusive: bool} $options
+     * Initializes the Dodo_Payments_API instance with configuration options.
+     *
+     * @param array{testmode: bool, api_key: string, global_tax_category: string, global_tax_inclusive: bool} $options Configuration options for API access and behavior.
      */
     public function __construct($options)
     {
@@ -27,11 +29,13 @@ class Dodo_Payments_API
     }
 
     /**
-     * Creates a product
+     * Creates a one-time price product in the Dodo Payments API using WooCommerce product data.
      *
-     * @param WC_Product $product Product in WooCommerce
-     * @return array{product_id: string} Product in the Dodo Payments API
-     * @throws \Exception
+     * Strips HTML from the product description, truncates it to 999 characters, and sends product details including name, price, currency, and tax settings to the API. Throws an exception if the API request fails.
+     *
+     * @param WC_Product $product The WooCommerce product to create in the API.
+     * @return array{product_id: string} The created product's data from the Dodo Payments API.
+     * @throws \Exception If the API request fails or returns an error response.
      */
     public function create_product($product)
     {
@@ -66,12 +70,13 @@ class Dodo_Payments_API
     }
 
     /**
-     * Update a product in the Dodo Payments API
+     * Updates an existing product in the Dodo Payments API with new WooCommerce product data.
      *
-     * @param string $dodo_product_id
-     * @param WC_Product $product
-     * @throws \Exception
-     * @return void
+     * Preserves the product's tax and discount settings from the API while updating its name, description, and price.
+     *
+     * @param string $dodo_product_id The Dodo Payments product ID to update.
+     * @param WC_Product $product The WooCommerce product containing updated data.
+     * @throws \Exception If the product is not found or the API update fails.
      */
     public function update_product($dodo_product_id, $product)
     {
@@ -114,12 +119,11 @@ class Dodo_Payments_API
     }
 
     /**
-     * Syncs the image for a product
+     * Uploads the WooCommerce product image to the Dodo Payments API and assigns it to the specified product.
      *
-     * @param WC_Product $product
-     * @param string $dodo_product_id
-     * @throws \Exception
-     * @return void
+     * @param WC_Product $product The WooCommerce product whose image will be synced.
+     * @param string $dodo_product_id The Dodo Payments product ID to associate the image with.
+     * @throws \Exception If the product has no image, the image file cannot be found or read, or if the upload or assignment fails.
      */
     public function sync_image_for_product($product, $dodo_product_id)
     {
@@ -159,14 +163,16 @@ class Dodo_Payments_API
     }
 
     /**
-     * Creates a payment in the Dodo Payments API
+     * Creates a payment in the Dodo Payments API using WooCommerce order data.
      *
-     * @param WC_Order $order
-     * @param array{amount: mixed, product_id: string, quantity: mixed}[] $synced_products
-     * @param string|null $dodo_discount_code Optional. The code of the discount code to apply to the payment.
-     * @param string $return_url The URL to redirect to after the payment is completed
-     * @throws \Exception
-     * @return array{payment_id: string, payment_link: string}
+     * Builds a payment request with billing and customer information, a list of synced products, an optional discount code, and a return URL. Returns the payment ID and payment link on success.
+     *
+     * @param WC_Order $order The WooCommerce order to use for payment details.
+     * @param array{amount: mixed, product_id: string, quantity: mixed}[] $synced_products List of products to include in the payment.
+     * @param string|null $dodo_discount_code Optional discount code to apply.
+     * @param string $return_url URL to redirect the customer after payment completion.
+     * @throws \Exception If the API request fails or returns an error.
+     * @return array{payment_id: string, payment_link: string} The created payment's ID and payment link.
      */
     public function create_payment($order, $synced_products, $dodo_discount_code, $return_url)
     {
@@ -202,11 +208,11 @@ class Dodo_Payments_API
     }
 
     /**
-     * Gets the upload url and image id for a product
+     * Requests an upload URL and image ID for a product image from the API.
      *
-     * @param string $dodo_product_id
-     * @return array{url: string, image_id: string}
-     * @throws \Exception
+     * @param string $dodo_product_id The ID of the product in the Dodo Payments API.
+     * @return array{url: string, image_id: string} An array containing the upload URL and image ID.
+     * @throws \Exception If the API request fails or returns an error response.
      */
     private function get_upload_url_and_image_id($dodo_product_id)
     {
@@ -229,12 +235,14 @@ class Dodo_Payments_API
 
 
     /**
-     * Sets an image id to a product
+     * Assigns an image to a product in the Dodo Payments API.
      *
-     * @param string $dodo_product_id
-     * @param string $image_id
+     * Updates the specified product with the given image ID by sending a PATCH request to the API.
+     *
+     * @param string $dodo_product_id The ID of the product in the Dodo Payments API.
+     * @param string $image_id The image ID to assign to the product.
      * @return void
-     * @throws \Exception
+     * @throws \Exception If the API request fails or returns a non-200 response.
      */
     private function set_product_image_id($dodo_product_id, $image_id)
     {
@@ -256,9 +264,11 @@ class Dodo_Payments_API
     }
 
     /**
-     * Get a product from the Dodo Payments API
+     * Retrieves product details from the Dodo Payments API by product ID.
      *
-     * @param string $dodo_product_id
+     * Returns an associative array of product data if found, or false if the product does not exist or an error occurs.
+     *
+     * @param string $dodo_product_id The unique identifier of the product in the Dodo Payments system.
      * @return array{
      *    addons: array<string>,
      *    business_id: string,
@@ -287,7 +297,7 @@ class Dodo_Payments_API
      *    product_id: string,
      *    tax_category: string,
      *    updated_at: string
-     * }|false
+     * }|false Product data array on success, or false if not found or on error.
      */
     public function get_product($dodo_product_id)
     {
@@ -307,9 +317,11 @@ class Dodo_Payments_API
     }
 
     /**
-     * Get discount code info from the Dodo Payments API
+     * Retrieves discount code details from the Dodo Payments API.
      *
-     * @param string $dodo_discount_id
+     * Returns an associative array with discount code information if found, or false if the code does not exist or an error occurs.
+     *
+     * @param string $dodo_discount_id The unique identifier of the discount code in the Dodo Payments system.
      * @return array{
      *    amount: int,
      *    business_id: string,
@@ -322,7 +334,7 @@ class Dodo_Payments_API
      *    times_used: int,
      *    type: string,
      *    usage_limit: int
-     * }|false
+     * }|false Discount code details as an associative array, or false if not found or on error.
      */
     public function get_discount_code($dodo_discount_id)
     {
@@ -342,7 +354,9 @@ class Dodo_Payments_API
     }
 
     /**
-     * Creates a discount code in the Dodo Payments API
+     * Creates a new discount code in the Dodo Payments API.
+     *
+     * Sends the provided discount code details to the API and returns the created discount code data.
      *
      * @param array{
      *    amount: int,
@@ -352,8 +366,7 @@ class Dodo_Payments_API
      *    restricted_to: string[],
      *    type: string,
      *    usage_limit: int
-     * } $dodo_discount_body
-     *
+     * } $dodo_discount_body Discount code details to create.
      * @return array{
      *    amount: int,
      *    business_id: string,
@@ -366,8 +379,8 @@ class Dodo_Payments_API
      *    times_used: int,
      *    type: string,
      *    usage_limit: int
-     * }
-     * @throws \Exception
+     * } The created discount code data.
+     * @throws \Exception If the API request fails or returns an error response.
      */
     public function create_discount_code($dodo_discount_body)
     {
@@ -385,33 +398,12 @@ class Dodo_Payments_API
     }
 
     /**
-     * Updates a discount code in the Dodo Payments API
+     * Updates an existing discount code in the Dodo Payments API.
      *
-     * @param string $dodo_discount_id
-     * @param array{
-     *    amount: int,
-     *    code: string,
-     *    expires_at: string,
-     *    name: string,
-     *    restricted_to: string[],
-     *    type: string,
-     *    usage_limit: int
-     * } $dodo_discount_body
-     *
-     * @return array{
-     *    amount: int,
-     *    business_id: string,
-     *    code: string,
-     *    created_at: string,
-     *    discount_id: string,
-     *    expires_at: string,
-     *    name: string,
-     *    restricted_to: string[],
-     *    times_used: int,
-     *    type: string,
-     *    usage_limit: int
-     * }
-     * @throws \Exception
+     * @param string $dodo_discount_id The ID of the discount code to update.
+     * @param array $dodo_discount_body The updated discount code data.
+     * @return array The updated discount code details.
+     * @throws \Exception If the API request fails or returns an error response.
      */
     public function update_discount_code($dodo_discount_id, $dodo_discount_body)
     {
@@ -429,11 +421,13 @@ class Dodo_Payments_API
     }
 
     /**
-     * Creates a subscription product
+     * Creates a subscription product in the Dodo Payments API using WooCommerce subscription product data.
      *
-     * @param WC_Product $product Product in WooCommerce
-     * @return array{product_id: string} Product in the Dodo Payments API
-     * @throws \Exception
+     * Extracts subscription period, interval, length, trial period, and price from the WooCommerce product, converts them to the API's expected format, and sends a request to create a recurring price product. Throws an exception if the WooCommerce Subscriptions plugin is not available or if the API request fails.
+     *
+     * @param WC_Product $product The WooCommerce subscription product to create in the API.
+     * @return array{product_id: string} The created product's data from the Dodo Payments API.
+     * @throws \Exception If the WooCommerce Subscriptions plugin is missing or the API request fails.
      */
     public function create_subscription_product($product)
     {
@@ -523,12 +517,13 @@ class Dodo_Payments_API
     }
 
     /**
-     * Updates a subscription product in the Dodo Payments API
+     * Updates an existing subscription product in the Dodo Payments API using WooCommerce subscription product data.
      *
-     * @param string $dodo_product_id
-     * @param WC_Product $product
-     * @throws \Exception
-     * @return void
+     * Retrieves the current product from the API, extracts subscription details from the WooCommerce product, and updates the API product while preserving existing discount and tax settings. Throws an exception if the WooCommerce Subscriptions plugin is missing, the product is not found, or the API request fails.
+     *
+     * @param string $dodo_product_id The Dodo Payments product ID to update.
+     * @param WC_Product $product The WooCommerce subscription product to sync.
+     * @throws \Exception If the WooCommerce Subscriptions plugin is missing, the product is not found, or the API update fails.
      */
     public function update_subscription_product($dodo_product_id, $product)
     {
@@ -623,19 +618,21 @@ class Dodo_Payments_API
     }
 
     /**
-     * Creates a subscription in the Dodo Payments API
+     * Creates a new subscription in the Dodo Payments API using WooCommerce order and product data.
      *
-     * @param WC_Order $order
-     * @param array{amount: mixed, product_id: string, quantity: mixed}[] $synced_products
-     * @param string|null $dodo_discount_code Optional. The code of the discount code to apply to the subscription.
-     * @param string $return_url The URL to redirect to after the subscription is completed
-     * @param bool $mandate_only Whether to only authorize payment method without immediate charge
-     * @throws \Exception
+     * Builds and sends a subscription creation request with customer, billing, product, and optional discount information. Supports generating a payment link for checkout and an optional mandate-only mode for payment authorization without immediate charge.
+     *
+     * @param WC_Order $order WooCommerce order containing customer and billing details.
+     * @param array $synced_products Array of product data synced with the Dodo Payments API.
+     * @param string|null $dodo_discount_code Optional discount code to apply to the subscription.
+     * @param string $return_url URL to redirect the customer after subscription completion.
+     * @param bool $mandate_only If true, only authorizes the payment method without charging immediately.
+     * @throws \Exception If the API request fails or returns an error response.
      * @return array{
      *    subscription_id: string,
-     *    payment_id: string
+     *    payment_id: string,
      *    payment_link: string,
-     * }
+     * } Subscription creation result including IDs and payment link.
      */
     public function create_subscription($order, $synced_products, $dodo_discount_code, $return_url, $mandate_only = false)
     {
@@ -690,10 +687,10 @@ class Dodo_Payments_API
     }
 
     /**
-     * Gets a subscription from the Dodo Payments API
+     * Retrieves subscription details from the Dodo Payments API.
      *
-     * @param string $dodo_subscription_id
-     * @return array|false
+     * @param string $dodo_subscription_id The ID of the subscription to retrieve.
+     * @return array|false The subscription data as an associative array, or false if not found or on error.
      */
     public function get_subscription($dodo_subscription_id)
     {
@@ -713,11 +710,12 @@ class Dodo_Payments_API
     }
 
     /**
-     * Cancels a subscription in the Dodo Payments API
+     * Cancels a subscription immediately in the Dodo Payments API.
      *
-     * @param string $dodo_subscription_id
-     * @throws \Exception
-     * @return void
+     * Sets the subscription status to 'cancelled' via the API. Throws an exception if the operation fails.
+     *
+     * @param string $dodo_subscription_id The ID of the subscription to cancel.
+     * @throws \Exception If the API request fails or returns an error response.
      */
     public function cancel_subscription($dodo_subscription_id)
     {
@@ -739,11 +737,10 @@ class Dodo_Payments_API
     }
 
     /**
-     * Cancels a subscription at next billing date in the Dodo Payments API
+     * Schedules a subscription to be canceled at its next billing date in the Dodo Payments API.
      *
-     * @param string $dodo_subscription_id
-     * @throws \Exception
-     * @return void
+     * @param string $dodo_subscription_id The ID of the subscription to update.
+     * @throws \Exception If the API request fails or returns an error response.
      */
     public function cancel_subscription_at_next_billing_date($dodo_subscription_id)
     {
@@ -765,11 +762,12 @@ class Dodo_Payments_API
     }
 
     /**
-     * Pauses a subscription in the Dodo Payments API
+     * Pauses an active subscription in the Dodo Payments API.
      *
-     * @param string $dodo_subscription_id
-     * @throws \Exception
-     * @return void
+     * Sets the subscription status to 'paused' for the specified subscription ID. Throws an exception if the API request fails.
+     *
+     * @param string $dodo_subscription_id The ID of the subscription to pause.
+     * @throws \Exception If the API request fails or returns an error response.
      */
     public function pause_subscription($dodo_subscription_id)
     {
@@ -791,11 +789,10 @@ class Dodo_Payments_API
     }
 
     /**
-     * Resumes a subscription in the Dodo Payments API
+     * Resumes a paused subscription in the Dodo Payments API by setting its status to active and clearing any pending cancellation.
      *
-     * @param string $dodo_subscription_id
-     * @throws \Exception
-     * @return void
+     * @param string $dodo_subscription_id The ID of the subscription to resume.
+     * @throws \Exception If the API request fails or returns an error response.
      */
     public function resume_subscription($dodo_subscription_id)
     {
@@ -818,10 +815,12 @@ class Dodo_Payments_API
     }
 
     /**
-     * Converts WooCommerce period to Dodo Payments interval format
+     * Converts a WooCommerce subscription period string to the Dodo Payments interval format.
      *
-     * @param string $wc_period
-     * @return string
+     * Supported values are 'day', 'week', 'month', and 'year'. Returns 'Month' if the input is unrecognized.
+     *
+     * @param string $wc_period WooCommerce subscription period ('day', 'week', 'month', 'year').
+     * @return string Corresponding Dodo Payments interval ('Day', 'Week', 'Month', 'Year').
      */
     private static function convert_wc_period_to_dodo($wc_period)
     {
@@ -839,6 +838,12 @@ class Dodo_Payments_API
         }
     }
 
+    /**
+     * Sends an authenticated GET request to the Dodo Payments API for the specified path.
+     *
+     * @param string $path The API endpoint path to request.
+     * @return array|WP_Error The response from the API as an array, or a WP_Error on failure.
+     */
     private function get($path)
     {
         return wp_remote_get(
@@ -851,6 +856,13 @@ class Dodo_Payments_API
         );
     }
 
+    /**
+     * Sends an authenticated POST request with a JSON body to the Dodo Payments API.
+     *
+     * @param string $path The API endpoint path.
+     * @param mixed $body The data to send as the JSON request body.
+     * @return array|WP_Error The response from the API or a WP_Error on failure.
+     */
     private function post($path, $body)
     {
         return wp_remote_post(
@@ -865,6 +877,13 @@ class Dodo_Payments_API
         );
     }
 
+    /**
+     * Sends an authenticated PUT request with a JSON body to the Dodo Payments API.
+     *
+     * @param string $path The API endpoint path.
+     * @param mixed $body The data to be sent as the JSON request body.
+     * @return array|WP_Error The response from the API or a WP_Error on failure.
+     */
     private function put($path, $body)
     {
         return wp_remote_request(
@@ -880,6 +899,13 @@ class Dodo_Payments_API
         );
     }
 
+    /**
+     * Sends an authenticated PATCH request with a JSON body to the Dodo Payments API.
+     *
+     * @param string $path The API endpoint path.
+     * @param mixed $body The data to be sent as the JSON request body.
+     * @return array|WP_Error The response from the API or a WP_Error on failure.
+     */
     private function patch($path, $body)
     {
         return wp_remote_request(
@@ -895,6 +921,11 @@ class Dodo_Payments_API
         );
     }
 
+    /**
+     * Returns the base URL for the Dodo Payments API, selecting the test or live endpoint based on the current mode.
+     *
+     * @return string The API base URL.
+     */
     private function get_base_url()
     {
         return $this->testmode ? 'https://test.dodopayments.com' : 'https://live.dodopayments.com';
