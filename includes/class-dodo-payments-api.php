@@ -631,7 +631,11 @@ class Dodo_Payments_API
      * @param string $return_url The URL to redirect to after the subscription is completed
      * @param bool $mandate_only Whether to only authorize payment method without immediate charge
      * @throws \Exception
-     * @return array{subscription_id: string, payment_link: string}
+     * @return array{
+     *    subscription_id: string,
+     *    payment_id: string
+     *    payment_link: string,
+     * }
      */
     public function create_subscription($order, $synced_products, $dodo_discount_code, $return_url, $mandate_only = false)
     {
@@ -735,6 +739,32 @@ class Dodo_Payments_API
     }
 
     /**
+     * Cancels a subscription at next billing date in the Dodo Payments API
+     *
+     * @param string $dodo_subscription_id
+     * @throws \Exception
+     * @return void
+     */
+    public function cancel_subscription_at_next_billing_date($dodo_subscription_id)
+    {
+        $body = array(
+            'cancel_at_next_billing_date' => true
+        );
+
+        $res = $this->patch("/subscriptions/{$dodo_subscription_id}", $body);
+
+        if (is_wp_error($res)) {
+            throw new Exception("Failed to cancel subscription: " . esc_html($res->get_error_message()));
+        }
+
+        if (wp_remote_retrieve_response_code($res) !== 200) {
+            throw new Exception("Failed to cancel subscription: " . esc_html($res['body']));
+        }
+
+        return;
+    }
+
+    /**
      * Pauses a subscription in the Dodo Payments API
      *
      * @param string $dodo_subscription_id
@@ -770,6 +800,7 @@ class Dodo_Payments_API
     public function resume_subscription($dodo_subscription_id)
     {
         $body = array(
+            'cancel_at_next_billing_date' => false,
             'status' => 'active'
         );
 
