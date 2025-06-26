@@ -39,17 +39,17 @@ class Dodo_Payments_API
         $truncated_description = mb_substr($stripped_description, 0, min(999, mb_strlen($stripped_description)));
 
         $body = array(
-        'name' => $product->get_name(),
-        'description' => $truncated_description,
-        'price' => array(
-        'type' => 'one_time_price',
-        'currency' => get_woocommerce_currency(),
-        'price' => (int) ($product->get_price() * 100), // fixme: assuming that the currency is INR or USD
-        'discount' => 0, // todo: update defaults
-        'purchasing_power_parity' => false, // todo: deal with it when the feature is implemented
-        'tax_inclusive' => $this->global_tax_inclusive,
-        ),
-        'tax_category' => $this->global_tax_category,
+            'name' => $product->get_name(),
+            'description' => $truncated_description,
+            'price' => array(
+                'type' => 'one_time_price',
+                'currency' => get_woocommerce_currency(),
+                'price' => (int) ($product->get_price() * 100), // fixme: assuming that the currency is INR or USD
+                'discount' => 0, // todo: update defaults
+                'purchasing_power_parity' => false, // todo: deal with it when the feature is implemented
+                'tax_inclusive' => $this->global_tax_inclusive,
+            ),
+            'tax_category' => $this->global_tax_category,
         );
 
         $res = $this->post('/products', $body);
@@ -87,17 +87,17 @@ class Dodo_Payments_API
         // ignore global options, respect the tax_category and tax_inclusive set
         // from the dashboard
         $body = array(
-        'name' => $product->get_name(),
-        'description' => $truncated_description,
-        'price' => array(
-        'type' => 'one_time_price',
-        'currency' => get_woocommerce_currency(),
-        'price' => (int) ($product->get_price() * 100), // fixme: assuming that the currency is INR or USD
-        'discount' => $dodo_product['price']['discount'],
-        'purchasing_power_parity' => $dodo_product['price']['purchasing_power_parity'],
-        'tax_inclusive' => $dodo_product['price']['tax_inclusive'],
-        ),
-        'tax_category' => $dodo_product['tax_category'],
+            'name' => $product->get_name(),
+            'description' => $truncated_description,
+            'price' => array(
+                'type' => 'one_time_price',
+                'currency' => get_woocommerce_currency(),
+                'price' => (int) ($product->get_price() * 100), // fixme: assuming that the currency is INR or USD
+                'discount' => $dodo_product['price']['discount'],
+                'purchasing_power_parity' => $dodo_product['price']['purchasing_power_parity'],
+                'tax_inclusive' => $dodo_product['price']['tax_inclusive'],
+            ),
+            'tax_category' => $dodo_product['tax_category'],
         );
 
         $res = $this->patch("/products/{$dodo_product_id}", $body);
@@ -141,8 +141,8 @@ class Dodo_Payments_API
 
         ['url' => $upload_url, 'image_id' => $image_id] = $this->get_upload_url_and_image_id($dodo_product_id);
         $response = wp_remote_request($upload_url, array(
-        'method' => 'PUT',
-        'body' => $image_contents,
+            'method' => 'PUT',
+            'body' => $image_contents,
         ));
 
         if (is_wp_error($response)) {
@@ -171,21 +171,21 @@ class Dodo_Payments_API
     public function create_payment($order, $synced_products, $dodo_discount_code, $return_url)
     {
         $request = array(
-        'billing' => array(
-        'city' => $order->get_billing_city(),
-        'country' => $order->get_billing_country(),
-        'state' => $order->get_billing_state(),
-        'street' => $order->get_billing_address_1() . ' ' . $order->get_billing_address_2(),
-        'zipcode' => $order->get_billing_postcode(),
-        ),
-        'customer' => array(
-        'email' => $order->get_billing_email(),
-        'name' => $order->get_billing_first_name() . ' ' . $order->get_billing_last_name(),
-        ),
-        'product_cart' => $synced_products,
-        'discount_code' => $dodo_discount_code,
-        'payment_link' => true,
-        'return_url' => $return_url,
+            'billing' => array(
+                'city' => $order->get_billing_city(),
+                'country' => $order->get_billing_country(),
+                'state' => $order->get_billing_state(),
+                'street' => $order->get_billing_address_1() . ' ' . $order->get_billing_address_2(),
+                'zipcode' => $order->get_billing_postcode(),
+            ),
+            'customer' => array(
+                'email' => $order->get_billing_email(),
+                'name' => $order->get_billing_first_name() . ' ' . $order->get_billing_last_name(),
+            ),
+            'product_cart' => $synced_products,
+            'discount_code' => $dodo_discount_code,
+            'payment_link' => true,
+            'return_url' => $return_url,
         );
 
         $res = $this->post('/payments', $request);
@@ -214,14 +214,14 @@ class Dodo_Payments_API
 
         if (is_wp_error($res)) {
             throw new Exception('Failed to get upload url and image id for product ('
-            . esc_html($dodo_product_id) . '): '
-            . esc_html($res->get_error_message()));
+                . esc_html($dodo_product_id) . '): '
+                . esc_html($res->get_error_message()));
         }
 
         if ($res['response']['code'] !== 200) {
             throw new Exception('Failed to get upload url and image id for product ('
-            . esc_html($dodo_product_id) . '): '
-            . esc_html($res['body']));
+                . esc_html($dodo_product_id) . '): '
+                . esc_html($res['body']));
         }
 
         return json_decode($res['body'], true);
@@ -242,14 +242,14 @@ class Dodo_Payments_API
 
         if (is_wp_error($res)) {
             throw new Exception('Failed to assign image (' . esc_html($image_id)
-            . ') to product (' . esc_html($dodo_product_id)
-            . '): ' . esc_html($res->get_error_message()));
+                . ') to product (' . esc_html($dodo_product_id)
+                . '): ' . esc_html($res->get_error_message()));
         }
 
         if ($res['response']['code'] !== 200) {
             throw new Exception('Failed to assign image (' . esc_html($image_id)
-            . ') to product (' . esc_html($dodo_product_id)
-            . '): ' . esc_html($res['body']));
+                . ') to product (' . esc_html($dodo_product_id)
+                . '): ' . esc_html($res['body']));
         }
 
         return;
@@ -489,24 +489,24 @@ class Dodo_Payments_API
         }
 
         $price_data = array(
-        'currency' => get_woocommerce_currency(),
-        'discount' => 0,
-        'payment_frequency_count' => (int) $period_count,
-        'payment_frequency_interval' => self::convert_wc_period_to_dodo($period),
-        'price' => (int) ($product->get_price() * 100),
-        'purchasing_power_parity' => false,
-        'subscription_period_count' => (int) $length,
-        'subscription_period_interval' => self::convert_wc_period_to_dodo($period),
-        'type' => 'recurring_price',
-        'tax_inclusive' => $this->global_tax_inclusive,
-        'trial_period_days' => $trial_period_days,
+            'currency' => get_woocommerce_currency(),
+            'discount' => 0,
+            'payment_frequency_count' => (int) $period_count,
+            'payment_frequency_interval' => self::convert_wc_period_to_dodo($period),
+            'price' => (int) ($product->get_price() * 100),
+            'purchasing_power_parity' => false,
+            'subscription_period_count' => (int) $length,
+            'subscription_period_interval' => self::convert_wc_period_to_dodo($period),
+            'type' => 'recurring_price',
+            'tax_inclusive' => $this->global_tax_inclusive,
+            'trial_period_days' => $trial_period_days,
         );
 
         $body = array(
-        'name' => $product->get_name(),
-        'description' => $truncated_description,
-        'price' => $price_data,
-        'tax_category' => $this->global_tax_category,
+            'name' => $product->get_name(),
+            'description' => $truncated_description,
+            'price' => $price_data,
+            'tax_category' => $this->global_tax_category,
         );
 
         $res = $this->post('/products', $body);
@@ -589,24 +589,24 @@ class Dodo_Payments_API
         }
 
         $price_data = array(
-        'currency' => get_woocommerce_currency(),
-        'payment_frequency_count' => (int) $period_count,
-        'payment_frequency_interval' => self::convert_wc_period_to_dodo($period),
-        'price' => (int) ($product->get_price() * 100),
-        'discount' => $dodo_product['price']['discount'],
-        'purchasing_power_parity' => $dodo_product['price']['purchasing_power_parity'],
-        'subscription_period_count' => (int) $length,
-        'subscription_period_interval' => self::convert_wc_period_to_dodo($period),
-        'type' => 'recurring_price',
-        'tax_inclusive' => $dodo_product['price']['tax_inclusive'],
-        'trial_period_days' => $trial_period_days,
+            'currency' => get_woocommerce_currency(),
+            'payment_frequency_count' => (int) $period_count,
+            'payment_frequency_interval' => self::convert_wc_period_to_dodo($period),
+            'price' => (int) ($product->get_price() * 100),
+            'discount' => $dodo_product['price']['discount'],
+            'purchasing_power_parity' => $dodo_product['price']['purchasing_power_parity'],
+            'subscription_period_count' => (int) $length,
+            'subscription_period_interval' => self::convert_wc_period_to_dodo($period),
+            'type' => 'recurring_price',
+            'tax_inclusive' => $dodo_product['price']['tax_inclusive'],
+            'trial_period_days' => $trial_period_days,
         );
 
         $body = array(
-        'name' => $product->get_name(),
-        'description' => $truncated_description,
-        'price' => $price_data,
-        'tax_category' => $dodo_product['tax_category'],
+            'name' => $product->get_name(),
+            'description' => $truncated_description,
+            'price' => $price_data,
+            'tax_category' => $dodo_product['tax_category'],
         );
 
         $res = $this->patch("/products/{$dodo_product_id}", $body);
@@ -639,19 +639,19 @@ class Dodo_Payments_API
         $first_product = $synced_products[0];
 
         $request = array(
-        'billing' => array(
-        'city' => $order->get_billing_city(),
-        'country' => $order->get_billing_country(),
-        'state' => $order->get_billing_state(),
-        'street' => $order->get_billing_address_1() . ' ' . $order->get_billing_address_2(),
-        'zipcode' => $order->get_billing_postcode(),
-        ),
-        'customer' => array(
-        'email' => $order->get_billing_email(),
-        'name' => $order->get_billing_first_name() . ' ' . $order->get_billing_last_name(),
-        ),
-        'product_id' => $first_product['product_id'],
-        'quantity' => $first_product['quantity'],
+            'billing' => array(
+                'city' => $order->get_billing_city(),
+                'country' => $order->get_billing_country(),
+                'state' => $order->get_billing_state(),
+                'street' => $order->get_billing_address_1() . ' ' . $order->get_billing_address_2(),
+                'zipcode' => $order->get_billing_postcode(),
+            ),
+            'customer' => array(
+                'email' => $order->get_billing_email(),
+                'name' => $order->get_billing_first_name() . ' ' . $order->get_billing_last_name(),
+            ),
+            'product_id' => $first_product['product_id'],
+            'quantity' => $first_product['quantity'],
         );
 
         // Add discount if provided
@@ -668,7 +668,7 @@ class Dodo_Payments_API
         // Add on-demand subscription configuration if mandate_only is true
         if ($mandate_only) {
             $request['on_demand'] = array(
-            'mandate_only' => true,
+                'mandate_only' => true,
             );
         }
 
@@ -718,7 +718,7 @@ class Dodo_Payments_API
     public function cancel_subscription($dodo_subscription_id)
     {
         $body = array(
-        'status' => 'cancelled'
+            'status' => 'cancelled'
         );
 
         $res = $this->patch("/subscriptions/{$dodo_subscription_id}", $body);
@@ -744,7 +744,7 @@ class Dodo_Payments_API
     public function pause_subscription($dodo_subscription_id)
     {
         $body = array(
-        'status' => 'paused'
+            'status' => 'paused'
         );
 
         $res = $this->patch("/subscriptions/{$dodo_subscription_id}", $body);
@@ -770,7 +770,7 @@ class Dodo_Payments_API
     public function resume_subscription($dodo_subscription_id)
     {
         $body = array(
-        'status' => 'active'
+            'status' => 'active'
         );
 
         $res = $this->patch("/subscriptions/{$dodo_subscription_id}", $body);
@@ -813,9 +813,9 @@ class Dodo_Payments_API
         return wp_remote_get(
             $this->get_base_url() . $path,
             array(
-            'headers' => array(
-            'Authorization' => 'Bearer ' . $this->api_key,
-            ),
+                'headers' => array(
+                    'Authorization' => 'Bearer ' . $this->api_key,
+                ),
             )
         );
     }
@@ -825,11 +825,11 @@ class Dodo_Payments_API
         return wp_remote_post(
             $this->get_base_url() . $path,
             array(
-            'headers' => array(
-            'Authorization' => 'Bearer ' . $this->api_key,
-            'Content-Type' => 'application/json',
-            ),
-            'body' => json_encode($body),
+                'headers' => array(
+                    'Authorization' => 'Bearer ' . $this->api_key,
+                    'Content-Type' => 'application/json',
+                ),
+                'body' => json_encode($body),
             )
         );
     }
@@ -839,12 +839,12 @@ class Dodo_Payments_API
         return wp_remote_request(
             $this->get_base_url() . $path,
             array(
-            'method' => 'PUT',
-            'headers' => array(
-            'Authorization' => 'Bearer ' . $this->api_key,
-            'Content-Type' => 'application/json',
-            ),
-            'body' => json_encode($body)
+                'method' => 'PUT',
+                'headers' => array(
+                    'Authorization' => 'Bearer ' . $this->api_key,
+                    'Content-Type' => 'application/json',
+                ),
+                'body' => json_encode($body)
             )
         );
     }
@@ -854,12 +854,12 @@ class Dodo_Payments_API
         return wp_remote_request(
             $this->get_base_url() . $path,
             array(
-            'method' => 'PATCH',
-            'headers' => array(
-            'Authorization' => 'Bearer ' . $this->api_key,
-            'Content-Type' => 'application/json',
-            ),
-            'body' => json_encode($body),
+                'method' => 'PATCH',
+                'headers' => array(
+                    'Authorization' => 'Bearer ' . $this->api_key,
+                    'Content-Type' => 'application/json',
+                ),
+                'body' => json_encode($body),
             )
         );
     }
