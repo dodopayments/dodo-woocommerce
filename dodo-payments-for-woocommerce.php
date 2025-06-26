@@ -871,10 +871,9 @@ function dodo_payments_init()
                     return;
                 }
 
-                $order->payment_complete($payment_id);
-
                 switch ($status) {
                     case 'succeeded':
+                        $order->payment_complete($payment_id);
                         $order->update_status('completed', __('Payment completed by Dodo Payments', 'dodo-payments-for-woocommerce'));
                         break;
 
@@ -1041,7 +1040,6 @@ function dodo_payments_init()
                     if ($renewal_order) {
                         $renewal_order->payment_complete();
                         $renewal_order->update_status('completed', __('Payment completed by Dodo Payments', 'dodo-payments-for-woocommerce'));
-
                         $subscription->add_order_note(__('Subscription renewed by Dodo Payments', 'dodo-payments-for-woocommerce'));
                     }
                 }
