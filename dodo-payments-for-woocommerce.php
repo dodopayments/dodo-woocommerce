@@ -811,7 +811,11 @@ function dodo_payments_init()
                     $webhook = new Dodo_Payments_Standard_Webhook($this->webhook_key);
                 } catch (\Exception $e) {
                     error_log('Dodo Payments: Invalid webhook key: ' . $e->getMessage());
-                    $this->consume_webhook_silently();
+                    if ($this->testmode) {
+                        status_header(401);
+                    } else {
+                        $this->consume_webhook_silently();
+                    }
                     return;
                 }
 
@@ -819,13 +823,28 @@ function dodo_payments_init()
                     $payload = $webhook->verify($body, $headers);
                 } catch (Exception $e) {
                     error_log('Dodo Payments: Could not verify webhook event: ' . $e->getMessage());
-                    $this->consume_webhook_silently();
+                    if ($this->testmode) {
+                        status_header(401);
+                    } else {
+                        $this->consume_webhook_silently();
+                    }
                     return;
                 }
 
                 // Can be
                 $type = $payload['type'];
                 $type_parts = explode('.', $type);
+
+                if (count($type_parts) < 2) {
+                    error_log('Dodo Payments: Invalid webhook event type format: ' . $type);
+                    if ($this->testmode) {
+                        status_header(400);
+                    } else {
+                        $this->consume_webhook_silently();
+                    }
+                    return;
+                }
+
                 $kind = $type_parts[0];
                 $status = $type_parts[1];
 
