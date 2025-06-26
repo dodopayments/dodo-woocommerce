@@ -21,6 +21,7 @@ Dodo Payments for WooCommerce is a comprehensive payment solution that handles a
 == Supports ==
 
 - Digital Products, Ebooks, Ed-Tech and SaaS products
+- Subscription products and recurring payments
 - Percentage based coupon codes
 - Classic Checkout Flow
 - Payments from multiple countries
@@ -38,6 +39,11 @@ Dodo Payments for WooCommerce is a comprehensive payment solution that handles a
 Currently, we support credit card payments through Dodo Payment Gateway.
 
 == Changelog ==
+
+= 0.3.0 =
+* Feature: Add comprehensive subscription support
+* Feature: Subscription product management and synchronization
+* Feature: Subscription lifecycle management (cancel, suspend, reactivate)
 
 = 0.2.5 =
 * Fix: remove unsupported syntax for PHP 7
