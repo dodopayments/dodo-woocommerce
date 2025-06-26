@@ -1027,20 +1027,22 @@ function dodo_payments_init()
                     return;
                 }
 
-                $subscription->add_order_note(
-                    sprintf(
-                        // translators: %1$s: Webhook type
-                        __('Subscription webhook received from Dodo Payments: %1$s', 'dodo-payments-for-woocommerce'),
-                        $payload['type']
-                    )
-                );
-
                 switch ($status) {
                     case 'active':
-                        $subscription->update_status('active', __('Subscription activated by Dodo Payments', 'dodo-payments-for-woocommerce'));
+                        $subscription->update_status(
+                            'active',
+                            sprintf(
+                                // translators: %1$s: Subscription ID
+                                __('Subscription activated by Dodo Payments: %1$s', 'dodo-payments-for-woocommerce'),
+                                $subscription_id
+                            )
+                        );
                         break;
 
                     case 'renewed':
+                        $subscription->add_order_note(
+                            __('Subscription renewed by Dodo Payments', 'dodo-payments-for-woocommerce')
+                        );
                         // doesn't do anything yet
                         $this->handle_subscription_renewal($subscription);
                         break;
