@@ -1040,6 +1040,8 @@ function dodo_payments_init()
                     $renewal_order = wcs_create_renewal_order($subscription);
                     if ($renewal_order) {
                         $renewal_order->payment_complete();
+                        $renewal_order->update_status('completed', __('Payment completed by Dodo Payments', 'dodo-payments-for-woocommerce'));
+
                         $subscription->add_order_note(__('Subscription renewed by Dodo Payments', 'dodo-payments-for-woocommerce'));
                     }
                 }
