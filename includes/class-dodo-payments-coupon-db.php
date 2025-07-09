@@ -29,6 +29,7 @@ class Dodo_Payments_Coupon_DB
     $table_name = $wpdb->prefix . self::$table_name;
     $charset_collate = $wpdb->get_charset_collate();
 
+    // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
     $sql = "CREATE TABLE IF NOT EXISTS $table_name (
             id bigint(20) NOT NULL AUTO_INCREMENT,
             local_coupon_id bigint(20) NOT NULL,
@@ -56,6 +57,7 @@ class Dodo_Payments_Coupon_DB
     $table_name = $wpdb->prefix . self::$table_name;
 
     return $wpdb->get_var(
+      // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
       $wpdb->prepare(
         "SELECT dodo_coupon_id FROM $table_name WHERE local_coupon_id = %d",
         $local_coupon_id
@@ -75,6 +77,7 @@ class Dodo_Payments_Coupon_DB
     $table_name = $wpdb->prefix . self::$table_name;
 
     return $wpdb->get_var(
+      // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
       $wpdb->prepare(
         "SELECT local_coupon_id FROM $table_name WHERE dodo_coupon_id = %s",
         $dodo_coupon_id

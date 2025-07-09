@@ -56,6 +56,7 @@ class Dodo_Payments_Product_DB
     $table_name = $wpdb->prefix . self::$table_name;
 
     return $wpdb->get_var(
+      // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
       $wpdb->prepare(
         "SELECT dodo_product_id FROM $table_name WHERE local_product_id = %d",
         $local_product_id
@@ -75,6 +76,7 @@ class Dodo_Payments_Product_DB
     $table_name = $wpdb->prefix . self::$table_name;
 
     return $wpdb->get_var(
+      // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
       $wpdb->prepare(
         "SELECT local_product_id FROM $table_name WHERE dodo_product_id = %s",
         $dodo_product_id
