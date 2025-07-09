@@ -29,6 +29,7 @@ class Dodo_Payments_Payment_DB
     $table_name = $wpdb->prefix . self::$table_name;
     $charset_collate = $wpdb->get_charset_collate();
 
+    // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
     $sql = "CREATE TABLE IF NOT EXISTS $table_name (
             id bigint(20) NOT NULL AUTO_INCREMENT,
             order_id bigint(20) NOT NULL,
@@ -56,6 +57,7 @@ class Dodo_Payments_Payment_DB
     $table_name = $wpdb->prefix . self::$table_name;
 
     return $wpdb->get_var(
+      // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
       $wpdb->prepare(
         "SELECT dodo_payment_id FROM $table_name WHERE order_id = %d",
         $order_id
@@ -75,6 +77,7 @@ class Dodo_Payments_Payment_DB
     $table_name = $wpdb->prefix . self::$table_name;
 
     return $wpdb->get_var(
+      // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
       $wpdb->prepare(
         "SELECT order_id FROM $table_name WHERE dodo_payment_id = %s",
         $dodo_payment_id

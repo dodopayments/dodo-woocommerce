@@ -3,8 +3,9 @@
 /**
  * Plugin Name: Dodo Payments for WooCommerce
  * Plugin URI: https://dodopayments.com
+ * Short Description: Accept payments globally within minutes.
  * Description: Dodo Payments plugin for WooCommerce. Accept payments from your customers using Dodo Payments.
- * Version: 0.3.0
+ * Version: 0.3.1
  * Author: Dodo Payments
  * Developer: Dodo Payments
  * Text Domain: dodo-payments-for-woocommerce
@@ -184,9 +185,10 @@ function dodo_payments_init()
              */
             public function init_form_fields()
             {
+                $webhook_url = add_query_arg('wc-api', $this->id, trailingslashit(home_url()));
                 $webhook_help_description = '<p>' .
                     __('Webhook endpoint for Dodo Payments. Use the below URL when generating a webhook signing key on Dodo Payments Dashboard.', 'dodo-payments-for-woocommerce')
-                    . '</p><p><code>' . home_url("/wc-api/{$this->id}/") . '</code></p>';
+                    . '</p><p><code>' . $webhook_url . '</code></p>';
                 ;
 
                 $this->form_fields = array(

@@ -1,5 +1,8 @@
 *** Dodo Payments for WooCommerce Changelog ***
 
+2025-07-09 - version 0.3.1
+* Fix: use plain permalink structure for webhook url which is more widely supported
+
 2025-06-18 - version 0.3.0
 * Feature: Add comprehensive subscription support
 * Feature: Subscription product management and synchronization
