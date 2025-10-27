@@ -3,7 +3,7 @@ Contributors: ayushdodopayments
 Tags: payments, woocommerce, dodo
 Requires at least: 6.1
 Tested up to: 6.8
-Stable tag: 0.3.2
+Stable tag: 0.3.3
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -39,6 +39,9 @@ Dodo Payments for WooCommerce is a comprehensive payment solution that handles a
 Currently, we support credit card payments through Dodo Payment Gateway.
 
 == Changelog ==
+
+= 0.3.3 =
+* fix: change subscription status to 'on_hold' instead of invalid state of 'paused' when a subscription is paused in woocommerce.
 
 = 0.3.2 =
 * fix: add missing import for cart exceptions which prevented cart errors from being displayed properly

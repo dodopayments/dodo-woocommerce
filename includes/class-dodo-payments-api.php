@@ -764,7 +764,7 @@ class Dodo_Payments_API
     /**
      * Pauses an active subscription in the Dodo Payments API.
      *
-     * Sets the subscription status to 'paused' for the specified subscription ID. Throws an exception if the API request fails.
+     * Sets the subscription status to 'on_hold' for the specified subscription ID. Throws an exception if the API request fails.
      *
      * @param string $dodo_subscription_id The ID of the subscription to pause.
      * @throws \Exception If the API request fails or returns an error response.
@@ -772,7 +772,7 @@ class Dodo_Payments_API
     public function pause_subscription($dodo_subscription_id)
     {
         $body = array(
-            'status' => 'paused'
+            'status' => 'on_hold'
         );
 
         $res = $this->patch("/subscriptions/{$dodo_subscription_id}", $body);
