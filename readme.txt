@@ -2,8 +2,8 @@
 Contributors: ayushdodopayments
 Tags: payments, woocommerce, dodo payments, merchant of record, subscriptions
 Requires at least: 6.1
-Tested up to: 6.8
-Stable tag: 0.3.3
+Tested up to: 6.9
+Stable tag: 0.3.4
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -133,6 +133,9 @@ Dodo Payments appears as the merchant. Your product or brand reference is includ
 Contact the Dodo Payments support team at [support@dodopayments.com](mailto:support@dodopayments.com). You can also access support through the "Get Support" icon on the [Dodo Payments Dashboard](https://app.dodopayments.com). For more information, visit [dodopayments.com](https://dodopayments.com).
 
 == Changelog ==
+
+= 0.3.4 =
+* docs: update readme with latest Dodo Payments info, payment methods, and FAQs
 
 = 0.3.3 =
 * fix: change subscription status to 'on_hold' instead of invalid state of 'paused' when a subscription is paused in woocommerce.
