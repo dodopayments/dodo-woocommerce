@@ -3,7 +3,7 @@ Contributors: ayushdodopayments
 Tags: payments, woocommerce, dodo payments, merchant of record, subscriptions
 Requires at least: 6.1
 Tested up to: 6.9
-Stable tag: 0.3.4
+Stable tag: 0.3.5
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 

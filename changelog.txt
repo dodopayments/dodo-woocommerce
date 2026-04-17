@@ -1,5 +1,8 @@
 *** Dodo Payments for WooCommerce Changelog ***
 
+2026-04-17 - version 0.3.5
+* Fix: truncate product names to 100 characters to prevent API validation errors
+
 2025-07-09 - version 0.3.1
 * Fix: use plain permalink structure for webhook url which is more widely supported
 
