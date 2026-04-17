@@ -43,7 +43,7 @@ class Dodo_Payments_API
         $truncated_description = mb_substr($stripped_description, 0, min(999, mb_strlen($stripped_description)));
 
         $body = array(
-            'name' => $product->get_name(),
+            'name' => mb_substr($product->get_name(), 0, 100),
             'description' => $truncated_description,
             'price' => array(
                 'type' => 'one_time_price',
@@ -92,7 +92,7 @@ class Dodo_Payments_API
         // ignore global options, respect the tax_category and tax_inclusive set
         // from the dashboard
         $body = array(
-            'name' => $product->get_name(),
+            'name' => mb_substr($product->get_name(), 0, 100),
             'description' => $truncated_description,
             'price' => array(
                 'type' => 'one_time_price',
@@ -497,7 +497,7 @@ class Dodo_Payments_API
         );
 
         $body = array(
-            'name' => $product->get_name(),
+            'name' => mb_substr($product->get_name(), 0, 100),
             'description' => $truncated_description,
             'price' => $price_data,
             'tax_category' => $this->global_tax_category,
@@ -598,7 +598,7 @@ class Dodo_Payments_API
         );
 
         $body = array(
-            'name' => $product->get_name(),
+            'name' => mb_substr($product->get_name(), 0, 100),
             'description' => $truncated_description,
             'price' => $price_data,
             'tax_category' => $dodo_product['tax_category'],
