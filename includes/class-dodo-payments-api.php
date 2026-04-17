@@ -2,6 +2,9 @@
 
 class Dodo_Payments_API
 {
+    private const MAX_PRODUCT_NAME_LENGTH = 100;
+    private const MAX_PRODUCT_DESCRIPTION_LENGTH = 999;
+
     private bool $testmode;
     private string $api_key;
     /**
@@ -40,10 +43,10 @@ class Dodo_Payments_API
     public function create_product($product)
     {
         $stripped_description = wp_strip_all_tags($product->get_description());
-        $truncated_description = mb_substr($stripped_description, 0, min(999, mb_strlen($stripped_description)));
+        $truncated_description = mb_substr($stripped_description, 0, self::MAX_PRODUCT_DESCRIPTION_LENGTH);
 
         $body = array(
-            'name' => mb_substr($product->get_name(), 0, 100),
+            'name' => mb_substr($product->get_name(), 0, self::MAX_PRODUCT_NAME_LENGTH),
             'description' => $truncated_description,
             'price' => array(
                 'type' => 'one_time_price',
@@ -87,12 +90,12 @@ class Dodo_Payments_API
         }
 
         $stripped_description = wp_strip_all_tags($product->get_description());
-        $truncated_description = mb_substr($stripped_description, 0, min(999, mb_strlen($stripped_description)));
+        $truncated_description = mb_substr($stripped_description, 0, self::MAX_PRODUCT_DESCRIPTION_LENGTH);
 
         // ignore global options, respect the tax_category and tax_inclusive set
         // from the dashboard
         $body = array(
-            'name' => mb_substr($product->get_name(), 0, 100),
+            'name' => mb_substr($product->get_name(), 0, self::MAX_PRODUCT_NAME_LENGTH),
             'description' => $truncated_description,
             'price' => array(
                 'type' => 'one_time_price',
@@ -436,7 +439,7 @@ class Dodo_Payments_API
         }
 
         $stripped_description = wp_strip_all_tags($product->get_description());
-        $truncated_description = mb_substr($stripped_description, 0, min(999, mb_strlen($stripped_description)));
+        $truncated_description = mb_substr($stripped_description, 0, self::MAX_PRODUCT_DESCRIPTION_LENGTH);
 
         // Get subscription details
         $period = WC_Subscriptions_Product::get_period($product);
@@ -497,7 +500,7 @@ class Dodo_Payments_API
         );
 
         $body = array(
-            'name' => mb_substr($product->get_name(), 0, 100),
+            'name' => mb_substr($product->get_name(), 0, self::MAX_PRODUCT_NAME_LENGTH),
             'description' => $truncated_description,
             'price' => $price_data,
             'tax_category' => $this->global_tax_category,
@@ -538,7 +541,7 @@ class Dodo_Payments_API
         }
 
         $stripped_description = wp_strip_all_tags($product->get_description());
-        $truncated_description = mb_substr($stripped_description, 0, min(999, mb_strlen($stripped_description)));
+        $truncated_description = mb_substr($stripped_description, 0, self::MAX_PRODUCT_DESCRIPTION_LENGTH);
 
         $period = WC_Subscriptions_Product::get_period($product);
         $period_count = WC_Subscriptions_Product::get_interval($product);
@@ -598,7 +601,7 @@ class Dodo_Payments_API
         );
 
         $body = array(
-            'name' => mb_substr($product->get_name(), 0, 100),
+            'name' => mb_substr($product->get_name(), 0, self::MAX_PRODUCT_NAME_LENGTH),
             'description' => $truncated_description,
             'price' => $price_data,
             'tax_category' => $dodo_product['tax_category'],
