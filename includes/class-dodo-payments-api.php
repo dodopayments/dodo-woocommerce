@@ -211,6 +211,11 @@ class Dodo_Payments_API
             'return_url' => $return_url,
         );
 
+        $tax_id = self::get_order_tax_id($order);
+        if ($tax_id !== null) {
+            $request['tax_id'] = $tax_id;
+        }
+
         if ($dodo_discount_code) {
             $request['discount_code'] = $dodo_discount_code;
         }
@@ -234,6 +239,45 @@ class Dodo_Payments_API
         }
 
         return json_decode($res['body'], true);
+    }
+
+    /**
+     * Best-effort lookup of the customer's tax ID / VAT number from a WC order.
+     *
+     * WooCommerce core does not collect a tax ID on its checkout form; the value
+     * comes from third-party VAT extensions, each of which uses its own order
+     * meta key. This helper checks the three most widely-used keys in the
+     * WooCommerce ecosystem and returns the first non-empty match.
+     *
+     * The list is intentionally short -- adding every long-tail key risks
+     * picking up the wrong field on stores running multiple extensions. Stores
+     * using a non-standard key can extend the list via the
+     * `dodo_payments_order_tax_id_meta_keys` filter without forking the plugin.
+     *
+     * Priority order (highest signal first):
+     *   1. `_billing_vat_number` -- WooCommerce EU VAT Number (official woocommerce.com extension)
+     *   2. `_billing_eu_vat_number` -- EU VAT for WooCommerce (WP Whale / Algoritmika)
+     *   3. `_billing_vat_id` -- Germanized Pro
+     *
+     * @param WC_Order $order
+     * @return string|null Trimmed tax ID, or null when none of the keys carry a value.
+     */
+    private static function get_order_tax_id($order)
+    {
+        $keys = apply_filters('dodo_payments_order_tax_id_meta_keys', array(
+            '_billing_vat_number',
+            '_billing_eu_vat_number',
+            '_billing_vat_id',
+        ), $order);
+
+        foreach ($keys as $key) {
+            $value = $order->get_meta($key, true);
+            if (is_string($value) && trim($value) !== '') {
+                return trim($value);
+            }
+        }
+
+        return null;
     }
 
     /**
