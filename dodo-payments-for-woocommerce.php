@@ -86,13 +86,25 @@ function dodo_payments_init()
                 $this->method_title = __('Dodo Payments', 'dodo-payments-for-woocommerce');
                 $this->method_description = __('Accept payments via Dodo Payments.', 'dodo-payments-for-woocommerce');
 
-                // Declare subscription support
+                // Declare subscription support.
+                //
+                // `gateway_scheduled_payments` tells WooCommerce Subscriptions that
+                // Dodo Payments schedules and bills renewals itself, so WCS should NOT
+                // run its own renewal scheduler against these subscriptions. Without
+                // this token WCS would flip every active Dodo subscription to on-hold
+                // at its locally-scheduled renewal time and create an orphan renewal
+                // order, even though Dodo would have gone on to bill the customer
+                // successfully on its own schedule. The plugin satisfies the contract
+                // by reacting to inbound `payment.succeeded` webhooks (with a
+                // subscription_id) and creating the matching WC renewal order via
+                // `handle_payment_webhook` -> `create_renewal_order`.
                 $this->supports = array(
                     'products',
                     'subscriptions',
                     'subscription_cancellation',
                     'subscription_suspension',
                     'subscription_reactivation',
+                    'gateway_scheduled_payments',
                 );
 
                 $this->enabled = $this->get_option('enabled');
