@@ -174,9 +174,10 @@ class Dodo_Payments_API
      * per-item `amount` override) or a subscription product; the API resolves the flow based on
      * the products' configuration.
      *
-     * All `billing_address` fields (except `country`) and `customer.name` are nullable in the
-     * Checkout Sessions schema, so WooCommerce values are forwarded verbatim -- empty strings
-     * included -- and the hosted Dodo checkout will collect anything that's still missing.
+     * `billing_address.country` is the only required billing field per the Checkout
+     * Sessions schema; every other `billing_address` field and `customer.name` are
+     * nullable, so WooCommerce values are forwarded verbatim -- empty strings included --
+     * and the hosted Dodo checkout will collect anything else that's still missing.
      *
      * @param WC_Order $order The WooCommerce order to use for checkout details.
      * @param array{amount: int|null, product_id: string, quantity: int}[] $synced_products List of products to include in the checkout.
@@ -184,7 +185,7 @@ class Dodo_Payments_API
      * @param string $return_url URL to redirect the customer after checkout completion.
      * @param array<string, string> $metadata Metadata to associate with the checkout (used by webhooks to resolve the WC order/subscription).
      * @param array{on_demand?: array{mandate_only: bool}, trial_period_days?: int}|null $subscription_data Optional subscription configuration (e.g. mandate-only authorization).
-     * @throws \Exception If the API request fails or returns an error.
+     * @throws \Exception If the order has no billing country or the API request fails.
      * @return array{session_id: string, checkout_url: string|null} The created checkout session.
      */
     public function create_checkout_session(
@@ -195,10 +196,18 @@ class Dodo_Payments_API
         $metadata = array(),
         $subscription_data = null
     ) {
+        // billing_address.country is the only required field inside billing_address
+        // per the Checkout Sessions schema. Fail fast with a clear message rather
+        // than ship an obviously-invalid request and surface an opaque 422.
+        $billing_country = $order->get_billing_country();
+        if (empty($billing_country)) {
+            throw new Exception('Failed to create checkout session: billing country is required.');
+        }
+
         $request = array(
             'billing_address' => array(
                 'city' => $order->get_billing_city(),
-                'country' => $order->get_billing_country(),
+                'country' => $billing_country,
                 'state' => $order->get_billing_state(),
                 'street' => trim($order->get_billing_address_1() . ' ' . $order->get_billing_address_2()),
                 'zipcode' => $order->get_billing_postcode(),
