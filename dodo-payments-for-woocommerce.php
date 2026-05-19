@@ -5,7 +5,7 @@
  * Plugin URI: https://dodopayments.com
  * Short Description: Accept payments globally within minutes.
  * Description: Dodo Payments plugin for WooCommerce. Accept payments from your customers using Dodo Payments.
- * Version: 0.3.5
+ * Version: 0.4.0
  * Author: Dodo Payments
  * Developer: Dodo Payments
  * Text Domain: dodo-payments-for-woocommerce
@@ -354,19 +354,31 @@ function dodo_payments_init()
                         }
                     }
 
-                    $response = $contains_subscription
-                        ? $this->dodo_payments_api->create_subscription(
-                            $order,
-                            $synced_products,
-                            $dodo_discount_code,
-                            $this->get_return_url($order)
-                        )
-                        : $this->dodo_payments_api->create_payment(
-                            $order,
-                            $synced_products,
-                            $dodo_discount_code,
-                            $this->get_return_url($order)
-                        );
+                    // Pass the WooCommerce order id (and subscription id, if any) via
+                    // metadata so the webhook handlers can resolve the WC entities even
+                    // before any payment_id/subscription_id mapping is recorded locally.
+                    // The deprecated /payments and /subscriptions endpoints returned
+                    // those IDs synchronously, but POST /checkouts only returns a
+                    // checkout session id + url -- the resource IDs arrive via webhooks.
+                    $metadata = array(
+                        'wc_order_id' => (string) $order->get_id(),
+                    );
+
+                    if ($contains_subscription && function_exists('wcs_get_subscriptions_for_order')) {
+                        $wc_subscriptions = wcs_get_subscriptions_for_order($order->get_id());
+                        if (!empty($wc_subscriptions)) {
+                            $wc_subscription = reset($wc_subscriptions);
+                            $metadata['wc_subscription_id'] = (string) $wc_subscription->get_id();
+                        }
+                    }
+
+                    $response = $this->dodo_payments_api->create_checkout_session(
+                        $order,
+                        $synced_products,
+                        $dodo_discount_code,
+                        $this->get_return_url($order),
+                        $metadata
+                    );
                 } catch (Exception $e) {
                     $order->add_order_note(
                         sprintf(
@@ -379,74 +391,25 @@ function dodo_payments_init()
                     return array('result' => 'failure');
                 }
 
-                // Handle both payment and subscription responses
-                if ($contains_subscription) {
-                    if (isset($response['payment_link'])) {
-                        if (isset($response['subscription_id'])) {
-                            // Save the subscription mapping
-                            $subscription_order = wcs_get_subscriptions_for_order($order->get_id());
-                            if (!empty($subscription_order)) {
-                                $subscription = reset($subscription_order);
-                                Dodo_Payments_Subscription_DB::save_mapping($subscription->get_id(), $response['subscription_id']);
-
-                                $order->add_order_note(
-                                    sprintf(
-                                        // translators: %1$s: Subscription ID
-                                        __('Subscription created in Dodo Payments: %1$s', 'dodo-payments-for-woocommerce'),
-                                        $response['subscription_id']
-                                    )
-                                );
-                            }
-                        }
-
-                        if (isset($response['payment_id'])) {
-                            // Save the payment mapping
-                            Dodo_Payments_Payment_DB::save_mapping($order->get_id(), $response['payment_id']);
-
-                            $order->add_order_note(
-                                sprintf(
-                                    // translators: %1$s: Payment ID
-                                    __('Payment created in Dodo Payments: %1$s', 'dodo-payments-for-woocommerce'),
-                                    $response['payment_id']
-                                )
-                            );
-                        }
-
-
-                        return array(
-                            'result' => 'success',
-                            'redirect' => $response['payment_link']
-                        );
-                    } else {
-                        $order->add_order_note(
-                            __('Failed to create subscription in Dodo Payments: Invalid response', 'dodo-payments-for-woocommerce')
-                        );
-                        return array('result' => 'failure');
-                    }
-                } else {
-                    if (isset($response['payment_link']) && isset($response['payment_id'])) {
-                        // Save the payment mapping
-                        Dodo_Payments_Payment_DB::save_mapping($order->get_id(), $response['payment_id']);
-
-                        $order->add_order_note(
-                            sprintf(
-                                // translators: %1$s: Payment ID
-                                __('Payment created in Dodo Payments: %1$s', 'dodo-payments-for-woocommerce'),
-                                $response['payment_id']
-                            )
-                        );
-
-                        return array(
-                            'result' => 'success',
-                            'redirect' => $response['payment_link']
-                        );
-                    } else {
-                        $order->add_order_note(
-                            __('Failed to create payment in Dodo Payments: Invalid response', 'dodo-payments-for-woocommerce')
-                        );
-                        return array('result' => 'failure');
-                    }
+                if (empty($response['checkout_url'])) {
+                    $order->add_order_note(
+                        __('Failed to create checkout session in Dodo Payments: Invalid response', 'dodo-payments-for-woocommerce')
+                    );
+                    return array('result' => 'failure');
                 }
+
+                $order->add_order_note(
+                    sprintf(
+                        // translators: %1$s: Checkout session ID
+                        __('Checkout session created in Dodo Payments: %1$s', 'dodo-payments-for-woocommerce'),
+                        isset($response['session_id']) ? $response['session_id'] : ''
+                    )
+                );
+
+                return array(
+                    'result' => 'success',
+                    'redirect' => $response['checkout_url'],
+                );
             }
 
             /**
@@ -887,6 +850,17 @@ function dodo_payments_init()
                 $payment_id = $payload['data']['payment_id'];
                 $order_id = Dodo_Payments_Payment_DB::get_order_id($payment_id);
 
+                // Fallback for checkout-sessions flow: payment_id is unknown at
+                // order-placement time, so the mapping is created lazily from the
+                // metadata we attached on the checkout session.
+                if (!$order_id) {
+                    $order_id = $this->resolve_order_id_from_metadata($payload);
+
+                    if ($order_id) {
+                        Dodo_Payments_Payment_DB::save_mapping($order_id, $payment_id);
+                    }
+                }
+
                 if (!$order_id) {
                     error_log('Dodo Payments: Could not find order_id for payment: ' . $payment_id);
                     return;
@@ -908,7 +882,19 @@ function dodo_payments_init()
                             $subscription_id = $payload['data']['subscription_id'];
                             $wc_subscription_id = Dodo_Payments_Subscription_DB::get_wc_subscription_id($subscription_id);
 
-                            if (function_exists('wcs_get_subscription')) {
+                            // Lazy mapping for checkout-sessions: rely on the
+                            // wc_subscription_id metadata we attached when creating
+                            // the checkout session.
+                            if (!$wc_subscription_id) {
+                                $wc_subscription_id = $this->resolve_wc_subscription_id_from_metadata($payload);
+
+                                if ($wc_subscription_id) {
+                                    Dodo_Payments_Subscription_DB::save_mapping($wc_subscription_id, $subscription_id);
+                                }
+                            }
+
+                            $subscription = null;
+                            if ($wc_subscription_id && function_exists('wcs_get_subscription')) {
                                 $subscription = wcs_get_subscription($wc_subscription_id);
                             }
 
@@ -957,6 +943,14 @@ function dodo_payments_init()
             {
                 $payment_id = $payload['data']['payment_id'];
                 $order_id = Dodo_Payments_Payment_DB::get_order_id($payment_id);
+
+                if (!$order_id) {
+                    $order_id = $this->resolve_order_id_from_metadata($payload);
+
+                    if ($order_id) {
+                        Dodo_Payments_Payment_DB::save_mapping($order_id, $payment_id);
+                    }
+                }
 
                 if (!$order_id) {
                     error_log('Dodo Payments: Could not find order for payment: ' . $payment_id);
@@ -1020,6 +1014,16 @@ function dodo_payments_init()
 
                 $subscription_id = $payload['data']['subscription_id'];
                 $wc_subscription_id = Dodo_Payments_Subscription_DB::get_wc_subscription_id($subscription_id);
+
+                // Fallback for checkout-sessions flow: the mapping is created
+                // lazily from the metadata we attached on the checkout session.
+                if (!$wc_subscription_id) {
+                    $wc_subscription_id = $this->resolve_wc_subscription_id_from_metadata($payload);
+
+                    if ($wc_subscription_id) {
+                        Dodo_Payments_Subscription_DB::save_mapping($wc_subscription_id, $subscription_id);
+                    }
+                }
 
                 if (!$wc_subscription_id) {
                     error_log('Dodo Payments: Could not find WooCommerce subscription for Dodo subscription: ' . $subscription_id);
@@ -1115,6 +1119,70 @@ function dodo_payments_init()
                         $subscription->add_order_note(__('Subscription renewed by Dodo Payments', 'dodo-payments-for-woocommerce'));
                     }
                 }
+            }
+
+            /**
+             * Resolve a WooCommerce order ID from the metadata attached to a webhook payload.
+             *
+             * The checkout-sessions API does not return payment_id/subscription_id at
+             * creation time, so we attach `wc_order_id` to the session's metadata and
+             * read it back here to bootstrap the local DB mapping on the first webhook.
+             *
+             * @param array $payload Webhook payload.
+             * @return int|null
+             */
+            private function resolve_order_id_from_metadata($payload)
+            {
+                if (!isset($payload['data']['metadata']) || !is_array($payload['data']['metadata'])) {
+                    return null;
+                }
+
+                $metadata = $payload['data']['metadata'];
+
+                if (!isset($metadata['wc_order_id'])) {
+                    return null;
+                }
+
+                $order_id = (int) $metadata['wc_order_id'];
+                if ($order_id <= 0) {
+                    return null;
+                }
+
+                if (!wc_get_order($order_id)) {
+                    return null;
+                }
+
+                return $order_id;
+            }
+
+            /**
+             * Resolve a WooCommerce subscription ID from the metadata attached to a webhook payload.
+             *
+             * @param array $payload Webhook payload.
+             * @return int|null
+             */
+            private function resolve_wc_subscription_id_from_metadata($payload)
+            {
+                if (!isset($payload['data']['metadata']) || !is_array($payload['data']['metadata'])) {
+                    return null;
+                }
+
+                $metadata = $payload['data']['metadata'];
+
+                if (!isset($metadata['wc_subscription_id'])) {
+                    return null;
+                }
+
+                $wc_subscription_id = (int) $metadata['wc_subscription_id'];
+                if ($wc_subscription_id <= 0) {
+                    return null;
+                }
+
+                if (!function_exists('wcs_get_subscription') || !wcs_get_subscription($wc_subscription_id)) {
+                    return null;
+                }
+
+                return $wc_subscription_id;
             }
 
             /**
