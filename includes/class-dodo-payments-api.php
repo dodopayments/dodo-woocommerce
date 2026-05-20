@@ -166,48 +166,127 @@ class Dodo_Payments_API
     }
 
     /**
-     * Creates a payment in the Dodo Payments API using WooCommerce order data.
+     * Creates a checkout session in the Dodo Payments API using WooCommerce order data.
      *
-     * Builds a payment request with billing and customer information, a list of synced products, an optional discount code, and a return URL. Returns the payment ID and payment link on success.
+     * Replaces the deprecated `POST /payments` and `POST /subscriptions` endpoints with the
+     * unified `POST /checkouts` endpoint that handles both one-time payments and subscriptions
+     * via a single product cart. The cart may contain either one-time products (which honor the
+     * per-item `amount` override) or a subscription product; the API resolves the flow based on
+     * the products' configuration.
      *
-     * @param WC_Order $order The WooCommerce order to use for payment details.
-     * @param array{amount: mixed, product_id: string, quantity: mixed}[] $synced_products List of products to include in the payment.
+     * `billing_address.country` is the only required billing field per the Checkout
+     * Sessions schema; every other `billing_address` field and `customer.name` are
+     * nullable, so WooCommerce values are forwarded verbatim -- empty strings included --
+     * and the hosted Dodo checkout will collect anything else that's still missing.
+     *
+     * @param WC_Order $order The WooCommerce order to use for checkout details.
+     * @param array{amount: int|null, product_id: string, quantity: int}[] $synced_products List of products to include in the checkout.
      * @param string|null $dodo_discount_code Optional discount code to apply.
-     * @param string $return_url URL to redirect the customer after payment completion.
-     * @throws \Exception If the API request fails or returns an error.
-     * @return array{payment_id: string, payment_link: string} The created payment's ID and payment link.
+     * @param string $return_url URL to redirect the customer after checkout completion.
+     * @param array<string, string> $metadata Metadata to associate with the checkout (used by webhooks to resolve the WC order/subscription).
+     * @param array{on_demand?: array{mandate_only: bool}, trial_period_days?: int}|null $subscription_data Optional subscription configuration (e.g. mandate-only authorization).
+     * @throws \Exception If the order has no billing country or the API request fails.
+     * @return array{session_id: string, checkout_url: string|null} The created checkout session.
      */
-    public function create_payment($order, $synced_products, $dodo_discount_code, $return_url)
-    {
+    public function create_checkout_session(
+        $order,
+        $synced_products,
+        $dodo_discount_code,
+        $return_url,
+        $metadata = array(),
+        $subscription_data = null
+    ) {
+        // billing_address.country is the only required field inside billing_address
+        // per the Checkout Sessions schema. Fail fast with a clear message rather
+        // than ship an obviously-invalid request and surface an opaque 422.
+        $billing_country = $order->get_billing_country();
+        if (empty($billing_country)) {
+            throw new Exception('Failed to create checkout session: billing country is required.');
+        }
+
         $request = array(
-            'billing' => array(
+            'billing_address' => array(
                 'city' => $order->get_billing_city(),
-                'country' => $order->get_billing_country(),
+                'country' => $billing_country,
                 'state' => $order->get_billing_state(),
-                'street' => $order->get_billing_address_1() . ' ' . $order->get_billing_address_2(),
+                'street' => trim($order->get_billing_address_1() . ' ' . $order->get_billing_address_2()),
                 'zipcode' => $order->get_billing_postcode(),
             ),
             'customer' => array(
                 'email' => $order->get_billing_email(),
-                'name' => $order->get_billing_first_name() . ' ' . $order->get_billing_last_name(),
+                'name' => trim($order->get_billing_first_name() . ' ' . $order->get_billing_last_name()),
             ),
             'product_cart' => $synced_products,
-            'discount_code' => $dodo_discount_code,
-            'payment_link' => true,
             'return_url' => $return_url,
         );
 
-        $res = $this->post('/payments', $request);
+        $tax_id = self::get_order_tax_id($order);
+        if ($tax_id !== null) {
+            $request['tax_id'] = $tax_id;
+        }
+
+        if ($dodo_discount_code) {
+            $request['discount_code'] = $dodo_discount_code;
+        }
+
+        if (!empty($metadata)) {
+            $request['metadata'] = $metadata;
+        }
+
+        if ($subscription_data !== null) {
+            $request['subscription_data'] = $subscription_data;
+        }
+
+        $res = $this->post('/checkouts', $request);
 
         if (is_wp_error($res)) {
-            throw new Exception("Failed to create payment: " . esc_html($res->get_error_message()));
+            throw new Exception('Failed to create checkout session: ' . esc_html($res->get_error_message()));
         }
 
         if (wp_remote_retrieve_response_code($res) !== 200) {
-            throw new Exception("Failed to create payment: " . esc_html($res['body']));
+            throw new Exception('Failed to create checkout session: ' . esc_html($res['body']));
         }
 
         return json_decode($res['body'], true);
+    }
+
+    /**
+     * Best-effort lookup of the customer's tax ID / VAT number from a WC order.
+     *
+     * WooCommerce core does not collect a tax ID on its checkout form; the value
+     * comes from third-party VAT extensions, each of which uses its own order
+     * meta key. This helper checks the three most widely-used keys in the
+     * WooCommerce ecosystem and returns the first non-empty match.
+     *
+     * The list is intentionally short -- adding every long-tail key risks
+     * picking up the wrong field on stores running multiple extensions. Stores
+     * using a non-standard key can extend the list via the
+     * `dodo_payments_order_tax_id_meta_keys` filter without forking the plugin.
+     *
+     * Priority order (highest signal first):
+     *   1. `_billing_vat_number` -- WooCommerce EU VAT Number (official woocommerce.com extension)
+     *   2. `_billing_eu_vat_number` -- EU VAT for WooCommerce (WP Whale / Algoritmika)
+     *   3. `_billing_vat_id` -- Germanized Pro
+     *
+     * @param WC_Order $order
+     * @return string|null Trimmed tax ID, or null when none of the keys carry a value.
+     */
+    private static function get_order_tax_id($order)
+    {
+        $keys = apply_filters('dodo_payments_order_tax_id_meta_keys', array(
+            '_billing_vat_number',
+            '_billing_eu_vat_number',
+            '_billing_vat_id',
+        ), $order);
+
+        foreach ($keys as $key) {
+            $value = $order->get_meta($key, true);
+            if (is_string($value) && trim($value) !== '') {
+                return trim($value);
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -618,75 +697,6 @@ class Dodo_Payments_API
         }
 
         return;
-    }
-
-    /**
-     * Creates a new subscription in the Dodo Payments API using WooCommerce order and product data.
-     *
-     * Builds and sends a subscription creation request with customer, billing, product, and optional discount information. Supports generating a payment link for checkout and an optional mandate-only mode for payment authorization without immediate charge.
-     *
-     * @param WC_Order $order WooCommerce order containing customer and billing details.
-     * @param array $synced_products Array of product data synced with the Dodo Payments API.
-     * @param string|null $dodo_discount_code Optional discount code to apply to the subscription.
-     * @param string $return_url URL to redirect the customer after subscription completion.
-     * @param bool $mandate_only If true, only authorizes the payment method without charging immediately.
-     * @throws \Exception If the API request fails or returns an error response.
-     * @return array{
-     *    subscription_id: string,
-     *    payment_id: string,
-     *    payment_link: string,
-     * } Subscription creation result including IDs and payment link.
-     */
-    public function create_subscription($order, $synced_products, $dodo_discount_code, $return_url, $mandate_only = false)
-    {
-        // Get the first product (subscriptions typically have one product)
-        $first_product = $synced_products[0];
-
-        $request = array(
-            'billing' => array(
-                'city' => $order->get_billing_city(),
-                'country' => $order->get_billing_country(),
-                'state' => $order->get_billing_state(),
-                'street' => $order->get_billing_address_1() . ' ' . $order->get_billing_address_2(),
-                'zipcode' => $order->get_billing_postcode(),
-            ),
-            'customer' => array(
-                'email' => $order->get_billing_email(),
-                'name' => $order->get_billing_first_name() . ' ' . $order->get_billing_last_name(),
-            ),
-            'product_id' => $first_product['product_id'],
-            'quantity' => $first_product['quantity'],
-        );
-
-        // Add discount if provided
-        if ($dodo_discount_code) {
-            $request['discount_code'] = $dodo_discount_code;
-        }
-
-        // Add payment link and return URL for checkout flow
-        if ($return_url) {
-            $request['payment_link'] = true;
-            $request['return_url'] = $return_url;
-        }
-
-        // Add on-demand subscription configuration if mandate_only is true
-        if ($mandate_only) {
-            $request['on_demand'] = array(
-                'mandate_only' => true,
-            );
-        }
-
-        $res = $this->post('/subscriptions', $request);
-
-        if (is_wp_error($res)) {
-            throw new Exception("Failed to create subscription: " . esc_html($res->get_error_message()));
-        }
-
-        if (wp_remote_retrieve_response_code($res) !== 200) {
-            throw new Exception("Failed to create subscription: " . esc_html($res['body']));
-        }
-
-        return json_decode($res['body'], true);
     }
 
     /**
