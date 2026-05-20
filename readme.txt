@@ -3,7 +3,7 @@ Contributors: ayushdodopayments
 Tags: payments, woocommerce, dodo payments, merchant of record, subscriptions
 Requires at least: 6.1
 Tested up to: 6.9
-Stable tag: 0.3.5
+Stable tag: 0.4.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -133,6 +133,10 @@ Dodo Payments appears as the merchant. Your product or brand reference is includ
 Contact the Dodo Payments support team at [support@dodopayments.com](mailto:support@dodopayments.com). You can also access support through the "Get Support" icon on the [Dodo Payments Dashboard](https://app.dodopayments.com). For more information, visit [dodopayments.com](https://dodopayments.com).
 
 == Changelog ==
+
+= 0.4.0 =
+* Migrate from deprecated create payment and create subscription APIs to the unified checkout sessions API
+* Use webhook metadata to map Dodo payment and subscription IDs back to WooCommerce orders and subscriptions
 
 = 0.3.4 =
 * docs: update readme with latest Dodo Payments info, payment methods, and FAQs

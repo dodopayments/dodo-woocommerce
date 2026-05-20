@@ -1,5 +1,9 @@
 *** Dodo Payments for WooCommerce Changelog ***
 
+2026-05-20 - version 0.4.0
+* Migrate from deprecated create payment and create subscription APIs to the unified checkout sessions API (POST /checkouts)
+* Use webhook metadata to map Dodo payment and subscription IDs back to WooCommerce orders and subscriptions
+
 2026-04-17 - version 0.3.5
 * Fix: truncate product names to 100 characters to prevent API validation errors
 
