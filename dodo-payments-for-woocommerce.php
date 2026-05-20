@@ -623,6 +623,7 @@ function dodo_payments_init()
 
                 return array(
                     'type' => 'percentage',
+                    'name' => $coupon->get_code(),
                     'code' => $coupon->get_code(),
                     'amount' => $coupon_amount,
                     'expires_at' => $expires_at,
