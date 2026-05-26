@@ -2,10 +2,12 @@
 Contributors: ayushdodopayments
 Tags: payments, woocommerce, dodo payments, merchant of record, subscriptions
 Requires at least: 6.1
-Tested up to: 6.9
-Stable tag: 0.4.0
+Tested up to: 7.0
+Stable tag: 0.4.1
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
+
+Accept payments globally within minutes using Dodo Payments for WooCommerce.
 
 == Description ==
 
@@ -133,6 +135,17 @@ Dodo Payments appears as the merchant. Your product or brand reference is includ
 Contact the Dodo Payments support team at [support@dodopayments.com](mailto:support@dodopayments.com). You can also access support through the "Get Support" icon on the [Dodo Payments Dashboard](https://app.dodopayments.com). For more information, visit [dodopayments.com](https://dodopayments.com).
 
 == Changelog ==
+
+= 0.4.1 =
+* fix: trim checkout session billing/customer fields and send blanks as null so hosted checkout can collect missing values
+
+= 0.4.0 =
+* Migration: Switched payment and subscription creation from the deprecated `POST /payments` and `POST /subscriptions` endpoints to the unified Checkout Sessions API (`POST /checkouts`).
+* Enhancement: WooCommerce order id (and subscription id, when applicable) are now passed as Dodo Payments checkout-session metadata so webhooks can resolve the originating order even before the first payment id is known.
+* Enhancement: Webhook handlers now lazily create the local order/subscription mapping from the metadata on the first inbound event, since checkout sessions no longer return `payment_id`/`subscription_id` at creation time.
+
+= 0.3.5 =
+* Fix: truncate product names to 100 characters to prevent API validation errors
 
 = 0.3.4 =
 * docs: update readme with latest Dodo Payments info, payment methods, and FAQs

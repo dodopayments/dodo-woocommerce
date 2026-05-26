@@ -1,5 +1,8 @@
 *** Dodo Payments for WooCommerce Changelog ***
 
+2026-05-27 - version 0.4.1
+* Fix: trim checkout session billing/customer fields and send blanks as null so hosted checkout can collect missing values.
+
 2026-05-19 - version 0.4.0
 * Migration: Switched payment and subscription creation from the deprecated `POST /payments` and `POST /subscriptions` endpoints to the unified Checkout Sessions API (`POST /checkouts`).
 * Enhancement: WooCommerce order id (and subscription id, when applicable) are now passed as Dodo Payments checkout-session metadata so webhooks can resolve the originating order even before the first payment id is known.
