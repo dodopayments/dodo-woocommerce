@@ -176,8 +176,10 @@ class Dodo_Payments_API
      *
      * `billing_address.country` is the only required billing field per the Checkout
      * Sessions schema; every other `billing_address` field and `customer.name` are
-     * nullable, so WooCommerce values are forwarded verbatim -- empty strings included --
-     * and the hosted Dodo checkout will collect anything else that's still missing.
+     * nullable. WooCommerce values are trimmed and any resulting empty strings are
+     * converted to `null` so the hosted Dodo checkout treats them as missing and
+     * prompts the customer to fill them in, instead of accepting whitespace-only
+     * values that would otherwise pass through verbatim.
      *
      * @param WC_Order $order The WooCommerce order to use for checkout details.
      * @param array{amount: int|null, product_id: string, quantity: int}[] $synced_products List of products to include in the checkout.
@@ -206,15 +208,15 @@ class Dodo_Payments_API
 
         $request = array(
             'billing_address' => array(
-                'city' => $order->get_billing_city(),
+                'city' => self::trim_to_null($order->get_billing_city()),
                 'country' => $billing_country,
-                'state' => $order->get_billing_state(),
-                'street' => trim($order->get_billing_address_1() . ' ' . $order->get_billing_address_2()),
-                'zipcode' => $order->get_billing_postcode(),
+                'state' => self::trim_to_null($order->get_billing_state()),
+                'street' => self::trim_to_null($order->get_billing_address_1() . ' ' . $order->get_billing_address_2()),
+                'zipcode' => self::trim_to_null($order->get_billing_postcode()),
             ),
             'customer' => array(
-                'email' => $order->get_billing_email(),
-                'name' => trim($order->get_billing_first_name() . ' ' . $order->get_billing_last_name()),
+                'email' => self::trim_to_null($order->get_billing_email()),
+                'name' => self::trim_to_null($order->get_billing_first_name() . ' ' . $order->get_billing_last_name()),
             ),
             'product_cart' => $synced_products,
             'return_url' => $return_url,
@@ -248,6 +250,31 @@ class Dodo_Payments_API
         }
 
         return json_decode($res['body'], true);
+    }
+
+    /**
+     * Normalizes a free-text field for the Checkout Sessions request body.
+     *
+     * WooCommerce stores unfilled billing fields as empty strings rather than
+     * `null`, and users routinely leave stray whitespace in the values they do
+     * provide. Forwarding either form to Dodo defeats the hosted checkout's
+     * "collect anything that's missing" behavior because whitespace and empty
+     * strings pass the API's nullable-string validation. Trimming first and
+     * coercing the result to `null` when nothing's left lets the hosted page
+     * prompt for the field as if it had never been set.
+     *
+     * @param mixed $value Raw value from the WC_Order getter (typically string|null).
+     * @return string|null Trimmed value, or null when empty / non-string.
+     */
+    private static function trim_to_null($value)
+    {
+        if (!is_string($value)) {
+            return null;
+        }
+
+        $trimmed = trim($value);
+
+        return $trimmed === '' ? null : $trimmed;
     }
 
     /**
