@@ -346,8 +346,8 @@ function dodo_payments_init()
              *
              * `api_default` mirrors the API's default for the flag and is only used
              * for the field's hint text. The customer-editing flags (other than
-             * business_name) don't state a default in the API reference; they are
-             * opt-in booleans, so `no` is assumed.
+             * business_name) don't state a default in the API reference, but the
+             * backend defaults them to false.
              *
              * @return array<string, array{title: string, description: string, api_default: string}>
              *
