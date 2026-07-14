@@ -137,7 +137,7 @@ Contact the Dodo Payments support team at [support@dodopayments.com](mailto:supp
 == Changelog ==
 
 = 0.5.0 =
-* Feature: control the hosted checkout's feature flags (currency selection, discount codes, tax ID, phone number collection, customer-editable fields, and more) from the plugin settings page. Flags left at "Dodo default" are omitted from the checkout session so Dodo Payments keeps control of their defaults.
+* Feature: control the hosted checkout's feature flags (currency selection, discount codes, tax ID, phone number collection, customer-editable fields, and more) from the plugin settings page. Flags left at "Default" are omitted from the checkout session so Dodo Payments keeps control of their defaults.
 * Dev: new `dodo_payments_checkout_session_feature_flags` filter to override feature flags per order.
 
 = 0.4.1 =

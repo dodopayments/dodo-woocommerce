@@ -80,7 +80,7 @@ function dodo_payments_init()
             /**
              * Checkout Session feature flag overrides selected in the settings page.
              * Only flags explicitly set to Enabled/Disabled are present; flags left
-             * at "Dodo default" are omitted so the API keeps control of defaults.
+             * at "Default" are omitted so the API keeps control of defaults.
              * @var array<string, bool>
              */
             private array $checkout_feature_flags = array();
@@ -301,22 +301,33 @@ function dodo_payments_init()
                     'checkout_feature_flags_section' => array(
                         'title' => __('Checkout Feature Flags', 'dodo-payments-for-woocommerce'),
                         'type' => 'title',
-                        'description' => __('Control the behavior of the hosted Dodo Payments checkout page. Flags left at "Dodo default" are not sent with the checkout session, so Dodo Payments keeps control of their defaults.', 'dodo-payments-for-woocommerce'),
+                        'description' => __('Control the behavior of the hosted Dodo Payments checkout page. Flags set to "Default" are not sent with the checkout session, so the Dodo Payments API applies its default.', 'dodo-payments-for-woocommerce'),
                     ),
                 );
 
                 foreach (self::checkout_feature_flag_definitions() as $flag_key => $flag) {
+                    $description = $flag['description'];
+                    if (isset($flag['api_default'])) {
+                        $description .= ' ' . sprintf(
+                            /* translators: %s: "Enabled" or "Disabled" */
+                            __('Default: %s.', 'dodo-payments-for-woocommerce'),
+                            'yes' === $flag['api_default']
+                                ? __('Enabled', 'dodo-payments-for-woocommerce')
+                                : __('Disabled', 'dodo-payments-for-woocommerce')
+                        );
+                    }
+
                     $this->form_fields['feature_flag_' . $flag_key] = array(
                         'title' => $flag['title'],
                         'type' => 'select',
                         'options' => array(
-                            '' => __('Dodo default', 'dodo-payments-for-woocommerce'),
+                            '' => __('Default', 'dodo-payments-for-woocommerce'),
                             'yes' => __('Enabled', 'dodo-payments-for-woocommerce'),
                             'no' => __('Disabled', 'dodo-payments-for-woocommerce'),
                         ),
                         'default' => '',
                         'desc_tip' => false,
-                        'description' => $flag['description'],
+                        'description' => $description,
                     );
                 }
 
@@ -333,7 +344,11 @@ function dodo_payments_init()
              *
              * See https://docs.dodopayments.com/api-reference/checkout-sessions/create#body-feature-flags
              *
-             * @return array<string, array{title: string, description: string}>
+             * `api_default` mirrors the default documented in the API reference and is
+             * only used for the field's hint text; flags without a documented default
+             * omit it.
+             *
+             * @return array<string, array{title: string, description: string, api_default?: string}>
              *
              * @since 0.5.0
              */
@@ -343,34 +358,42 @@ function dodo_payments_init()
                     'allow_currency_selection' => array(
                         'title' => __('Allow Currency Selection', 'dodo-payments-for-woocommerce'),
                         'description' => __('Let customers change the currency they pay in on the hosted checkout.', 'dodo-payments-for-woocommerce'),
+                        'api_default' => 'yes',
                     ),
                     'allow_discount_code' => array(
                         'title' => __('Allow Discount Codes', 'dodo-payments-for-woocommerce'),
                         'description' => __('Let customers apply a Dodo Payments discount code on the hosted checkout. Note: a WooCommerce coupon applied to the order is already passed along automatically.', 'dodo-payments-for-woocommerce'),
+                        'api_default' => 'yes',
                     ),
                     'allow_tax_id' => array(
                         'title' => __('Allow Tax ID', 'dodo-payments-for-woocommerce'),
                         'description' => __('Let customers add a tax ID on the hosted checkout.', 'dodo-payments-for-woocommerce'),
+                        'api_default' => 'yes',
                     ),
                     'allow_phone_number_collection' => array(
                         'title' => __('Collect Phone Number', 'dodo-payments-for-woocommerce'),
                         'description' => __('Collect the customer\'s phone number on the hosted checkout.', 'dodo-payments-for-woocommerce'),
+                        'api_default' => 'yes',
                     ),
                     'require_phone_number' => array(
                         'title' => __('Require Phone Number', 'dodo-payments-for-woocommerce'),
                         'description' => __('Require customers to provide a phone number to complete checkout.', 'dodo-payments-for-woocommerce'),
+                        'api_default' => 'no',
                     ),
                     'allow_editing_addons' => array(
                         'title' => __('Allow Editing Addons', 'dodo-payments-for-woocommerce'),
                         'description' => __('Let customers add or remove addons on a subscription product during checkout.', 'dodo-payments-for-woocommerce'),
+                        'api_default' => 'no',
                     ),
                     'always_create_new_customer' => array(
                         'title' => __('Always Create New Customer', 'dodo-payments-for-woocommerce'),
                         'description' => __('Always create a new Dodo Payments customer for the checkout instead of reusing an existing customer with the same email.', 'dodo-payments-for-woocommerce'),
+                        'api_default' => 'no',
                     ),
                     'redirect_immediately' => array(
                         'title' => __('Redirect Immediately', 'dodo-payments-for-woocommerce'),
                         'description' => __('Redirect customers back to your store immediately after payment completion.', 'dodo-payments-for-woocommerce'),
+                        'api_default' => 'no',
                     ),
                 );
 
@@ -395,13 +418,16 @@ function dodo_payments_init()
                     );
                 }
 
+                // business_name is the only customer-editing flag with a documented default.
+                $definitions['allow_customer_editing_business_name']['api_default'] = 'no';
+
                 return $definitions;
             }
 
             /**
              * Collects the feature flag overrides explicitly set on the settings page.
              *
-             * Flags left at "Dodo default" (empty value) are omitted so the Checkout
+             * Flags left at "Default" (empty value) are omitted so the Checkout
              * Sessions API applies its own defaults for them.
              *
              * @return array<string, bool>
