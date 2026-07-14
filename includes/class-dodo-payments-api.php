@@ -17,11 +17,18 @@ class Dodo_Payments_API
      * @var bool
      */
     private bool $global_tax_inclusive;
+    /**
+     * Checkout Session feature flag overrides, keyed by API field name.
+     * Only explicitly configured flags are present; omitted flags fall back
+     * to the Checkout Sessions API defaults.
+     * @var array<string, bool>
+     */
+    private array $feature_flags;
 
     /**
      * Initializes the Dodo_Payments_API instance with configuration options.
      *
-     * @param array{testmode: bool, api_key: string, global_tax_category: string, global_tax_inclusive: bool} $options Configuration options for API access and behavior.
+     * @param array{testmode: bool, api_key: string, global_tax_category: string, global_tax_inclusive: bool, feature_flags?: array<string, bool>} $options Configuration options for API access and behavior.
      */
     public function __construct($options)
     {
@@ -29,6 +36,7 @@ class Dodo_Payments_API
         $this->api_key = $options['api_key'];
         $this->global_tax_category = $options['global_tax_category'];
         $this->global_tax_inclusive = $options['global_tax_inclusive'];
+        $this->feature_flags = isset($options['feature_flags']) ? $options['feature_flags'] : array();
     }
 
     /**
@@ -237,6 +245,19 @@ class Dodo_Payments_API
 
         if ($subscription_data !== null) {
             $request['subscription_data'] = $subscription_data;
+        }
+
+        /**
+         * Filters the Checkout Session feature flags before the session is created.
+         *
+         * @param array<string, bool> $feature_flags Feature flag overrides from the plugin settings.
+         * @param WC_Order $order The WooCommerce order the checkout session is for.
+         *
+         * @since 0.5.0
+         */
+        $feature_flags = apply_filters('dodo_payments_checkout_session_feature_flags', $this->feature_flags, $order);
+        if (is_array($feature_flags) && !empty($feature_flags)) {
+            $request['feature_flags'] = $feature_flags;
         }
 
         $res = $this->post('/checkouts', $request);

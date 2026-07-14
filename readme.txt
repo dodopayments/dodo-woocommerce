@@ -3,7 +3,7 @@ Contributors: ayushdodopayments
 Tags: payments, woocommerce, dodo payments, merchant of record, subscriptions
 Requires at least: 6.1
 Tested up to: 7.0
-Stable tag: 0.4.1
+Stable tag: 0.5.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -135,6 +135,10 @@ Dodo Payments appears as the merchant. Your product or brand reference is includ
 Contact the Dodo Payments support team at [support@dodopayments.com](mailto:support@dodopayments.com). You can also access support through the "Get Support" icon on the [Dodo Payments Dashboard](https://app.dodopayments.com). For more information, visit [dodopayments.com](https://dodopayments.com).
 
 == Changelog ==
+
+= 0.5.0 =
+* Feature: control the hosted checkout's feature flags (currency selection, discount codes, tax ID, phone number collection, customer-editable fields, and more) from the plugin settings page. Flags left at "Dodo default" are omitted from the checkout session so Dodo Payments keeps control of their defaults.
+* Dev: new `dodo_payments_checkout_session_feature_flags` filter to override feature flags per order.
 
 = 0.4.1 =
 * fix: trim checkout session billing/customer fields and send blanks as null so hosted checkout can collect missing values
