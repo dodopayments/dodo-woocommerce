@@ -1,5 +1,9 @@
 *** Dodo Payments for WooCommerce Changelog ***
 
+2026-07-14 - version 0.5.0
+* Feature: control the hosted checkout's feature flags (currency selection, discount codes, tax ID, phone number collection, customer-editable fields, and more) from the plugin settings page. Flags left at "Default" are omitted from the checkout session so Dodo Payments keeps control of their defaults.
+* Dev: new `dodo_payments_checkout_session_feature_flags` filter to override feature flags per order.
+
 2026-05-27 - version 0.4.1
 * Fix: trim checkout session billing/customer fields and send blanks as null so hosted checkout can collect missing values.
 
