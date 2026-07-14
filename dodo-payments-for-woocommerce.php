@@ -344,11 +344,12 @@ function dodo_payments_init()
              *
              * See https://docs.dodopayments.com/api-reference/checkout-sessions/create#body-feature-flags
              *
-             * `api_default` mirrors the default documented in the API reference and is
-             * only used for the field's hint text; flags without a documented default
-             * omit it.
+             * `api_default` mirrors the API's default for the flag and is only used
+             * for the field's hint text. The customer-editing flags (other than
+             * business_name) don't state a default in the API reference; they are
+             * opt-in booleans, so `no` is assumed.
              *
-             * @return array<string, array{title: string, description: string, api_default?: string}>
+             * @return array<string, array{title: string, description: string, api_default: string}>
              *
              * @since 0.5.0
              */
@@ -415,11 +416,9 @@ function dodo_payments_init()
                         'title' => sprintf(__('Customer Can Edit %s', 'dodo-payments-for-woocommerce'), $field_label),
                         /* translators: %s: name of the checkout field the customer may edit, e.g. "Email" */
                         'description' => sprintf(__('Let customers edit the %s field on the hosted checkout. Changes made there are not synced back to the WooCommerce order.', 'dodo-payments-for-woocommerce'), $field_label),
+                        'api_default' => 'no',
                     );
                 }
-
-                // business_name is the only customer-editing flag with a documented default.
-                $definitions['allow_customer_editing_business_name']['api_default'] = 'no';
 
                 return $definitions;
             }
