@@ -40,6 +40,23 @@ class Dodo_Payments_API
     }
 
     /**
+     * Safely converts a WooCommerce price into the smallest currency unit (e.g. cents).
+     *
+     * WC_Product::get_price() returns a string, and some themes/plugins build the cart from
+     * a formatted price (e.g. "1,299.00"). On PHP 8+, multiplying a non-clean-numeric string
+     * by an int throws a TypeError ("Unsupported operand types: string * int"). We sanitize the
+     * value with wc_format_decimal() (strips thousands separators, normalizes the decimal
+     * separator) and cast to float before converting; round() guards against float precision drift.
+     *
+     * @param mixed $price The WooCommerce price (string, float, or int).
+     * @return int The price in the smallest currency unit.
+     */
+    private static function price_to_minor_units($price)
+    {
+        return (int) round((float) wc_format_decimal($price) * 100);
+    }
+
+    /**
      * Creates a one-time price product in the Dodo Payments API using WooCommerce product data.
      *
      * Strips HTML from the product description, truncates it to 999 characters, and sends product details including name, price, currency, and tax settings to the API. Throws an exception if the API request fails.
@@ -59,7 +76,7 @@ class Dodo_Payments_API
             'price' => array(
                 'type' => 'one_time_price',
                 'currency' => get_woocommerce_currency(),
-                'price' => (int) ($product->get_price() * 100), // fixme: assuming that the currency is INR or USD
+                'price' => self::price_to_minor_units($product->get_price()), // fixme: assuming that the currency is INR or USD
                 'discount' => 0, // todo: update defaults
                 'purchasing_power_parity' => false, // todo: deal with it when the feature is implemented
                 'tax_inclusive' => $this->global_tax_inclusive,
@@ -108,7 +125,7 @@ class Dodo_Payments_API
             'price' => array(
                 'type' => 'one_time_price',
                 'currency' => get_woocommerce_currency(),
-                'price' => (int) ($product->get_price() * 100), // fixme: assuming that the currency is INR or USD
+                'price' => self::price_to_minor_units($product->get_price()), // fixme: assuming that the currency is INR or USD
                 'discount' => $dodo_product['price']['discount'],
                 'purchasing_power_parity' => $dodo_product['price']['purchasing_power_parity'],
                 'tax_inclusive' => $dodo_product['price']['tax_inclusive'],
@@ -617,7 +634,7 @@ class Dodo_Payments_API
             'discount' => 0,
             'payment_frequency_count' => (int) $period_count,
             'payment_frequency_interval' => self::convert_wc_period_to_dodo($period),
-            'price' => (int) ($product->get_price() * 100),
+            'price' => self::price_to_minor_units($product->get_price()),
             'purchasing_power_parity' => false,
             'subscription_period_count' => (int) $length,
             'subscription_period_interval' => self::convert_wc_period_to_dodo($period),
@@ -717,7 +734,7 @@ class Dodo_Payments_API
             'currency' => get_woocommerce_currency(),
             'payment_frequency_count' => (int) $period_count,
             'payment_frequency_interval' => self::convert_wc_period_to_dodo($period),
-            'price' => (int) ($product->get_price() * 100),
+            'price' => self::price_to_minor_units($product->get_price()),
             'discount' => $dodo_product['price']['discount'],
             'purchasing_power_parity' => $dodo_product['price']['purchasing_power_parity'],
             'subscription_period_count' => (int) $length,
