@@ -1,5 +1,9 @@
 *** Dodo Payments for WooCommerce Changelog ***
 
+2026-07-24 - version 0.6.0
+* Feature: configure a custom return URL from the plugin settings, used instead of the default WooCommerce order-received page after a successful hosted checkout.
+* Dev: new `dodo_payments_checkout_return_url` filter to override the return URL per order.
+
 2026-07-14 - version 0.5.0
 * Feature: control the hosted checkout's feature flags (currency selection, discount codes, tax ID, phone number collection, customer-editable fields, and more) from the plugin settings page. Flags left at "Default" are omitted from the checkout session so Dodo Payments keeps control of their defaults.
 * Dev: new `dodo_payments_checkout_session_feature_flags` filter to override feature flags per order.

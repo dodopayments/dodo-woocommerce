@@ -5,7 +5,7 @@
  * Plugin URI: https://dodopayments.com
  * Short Description: Accept payments globally within minutes.
  * Description: Dodo Payments plugin for WooCommerce. Accept payments from your customers using Dodo Payments.
- * Version: 0.5.0
+ * Version: 0.6.0
  * Author: Dodo Payments
  * Developer: Dodo Payments
  * Text Domain: dodo-payments-for-woocommerce
@@ -71,6 +71,7 @@ function dodo_payments_init()
             private bool $testmode;
             private string $api_key;
             private string $webhook_key;
+            private string $return_url;
 
             protected Dodo_Payments_API $dodo_payments_api;
 
@@ -119,6 +120,7 @@ function dodo_payments_init()
                 $this->title = $this->get_option('title');
                 $this->description = $this->get_option('description');
                 $this->instructions = $this->get_option('instructions');
+                $this->return_url = $this->get_option('return_url');
 
                 $this->testmode = 'yes' === $this->get_option('testmode');
                 $this->api_key = $this->testmode ? $this->get_option('test_api_key') : $this->get_option('live_api_key');
@@ -135,6 +137,8 @@ function dodo_payments_init()
                 $this->init_dodo_payments_api();
 
                 add_action('woocommerce_update_options_payment_gateways_' . $this->id, array($this, 'process_admin_options'));
+
+                add_action('admin_notices', array($this, 'display_errors'));
 
                 add_action('woocommerce_thankyou_' . $this->id, array($this, 'thank_you_page'));
 
@@ -298,6 +302,13 @@ function dodo_payments_init()
                         'desc_tip' => false,
                         'description' => __('Select if tax is included on all product prices. You can override this on a per-product basis on Dodo Payments Dashboard.', 'dodo-payments-for-woocommerce'),
                     ),
+                    'return_url' => array(
+                        'title' => __('Return URL', 'dodo-payments-for-woocommerce'),
+                        'type' => 'text',
+                        'default' => '',
+                        'desc_tip' => false,
+                        'description' => __('Where the customer is redirected after paying on the hosted Dodo Payments checkout. Leave blank to use the default WooCommerce order-received page.', 'dodo-payments-for-woocommerce'),
+                    ),
                     'checkout_feature_flags_section' => array(
                         'title' => __('Checkout Feature Flags', 'dodo-payments-for-woocommerce'),
                         'type' => 'title',
@@ -449,6 +460,73 @@ function dodo_payments_init()
                 return $flags;
             }
 
+            /**
+             * Resolves the URL the customer is sent to after paying, falling back to
+             * WooCommerce's default order-received page when no return URL is
+             * configured, or when the configured value isn't a valid http(s) URL.
+             *
+             * @param \WC_Order $order
+             * @return string
+             *
+             * @since 0.6.0
+             */
+            private function get_checkout_return_url($order)
+            {
+                $return_url = $this->get_return_url($order);
+
+                if (!empty($this->return_url) && self::is_valid_redirect_url($this->return_url)) {
+                    $return_url = $this->return_url;
+                }
+
+                /**
+                 * Filters the URL the customer is redirected to after a successful checkout.
+                 *
+                 * @param string $return_url The resolved return URL.
+                 * @param WC_Order $order The WooCommerce order the checkout is for.
+                 *
+                 * @since 0.6.0
+                 */
+                return apply_filters('dodo_payments_checkout_return_url', $return_url, $order);
+            }
+
+            /**
+             * Checks a URL is well-formed http(s).
+             *
+             * @param string $url
+             * @return bool
+             *
+             * @since 0.6.0
+             */
+            private static function is_valid_redirect_url($url)
+            {
+                if (false === filter_var($url, FILTER_VALIDATE_URL)) {
+                    return false;
+                }
+
+                return in_array(wp_parse_url($url, PHP_URL_SCHEME), array('http', 'https'), true);
+            }
+
+            /**
+             * Validates the Return URL setting field.
+             *
+             * @param string $key
+             * @param string|null $value
+             * @return string
+             * @throws Exception If the value is set and isn't a valid http(s) URL.
+             *
+             * @since 0.6.0
+             */
+            public function validate_return_url_field($key, $value)
+            {
+                $value = $this->validate_text_field($key, $value);
+
+                if ('' !== $value && !self::is_valid_redirect_url($value)) {
+                    throw new Exception(__('Return URL must be a valid http:// or https:// URL.', 'dodo-payments-for-woocommerce'));
+                }
+
+                return $value;
+            }
+
             public function process_payment($order_id)
             {
                 $order = wc_get_order($order_id);
@@ -461,7 +539,7 @@ function dodo_payments_init()
                     WC()->cart->empty_cart();
                     return array(
                         'result' => 'success',
-                        'redirect' => $this->get_return_url($order)
+                        'redirect' => $this->get_checkout_return_url($order)
                     );
                 }
 
@@ -542,7 +620,7 @@ function dodo_payments_init()
                         $order,
                         $synced_products,
                         $dodo_discount_code,
-                        $this->get_return_url($order),
+                        $this->get_checkout_return_url($order),
                         $metadata
                     );
                 } catch (Exception $e) {
