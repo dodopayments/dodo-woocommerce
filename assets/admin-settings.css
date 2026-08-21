@@ -1,0 +1,226 @@
+/**
+ * Dodo Payments -- gateway settings screen.
+ *
+ * Scoped entirely to the elements this plugin renders. The stock WooCommerce
+ * settings markup is left alone.
+ */
+
+/* ---------------------------------------------------------------------------
+   Collapsible sections
+   --------------------------------------------------------------------------- */
+
+.dodo-panel {
+	background: #fff;
+	border: 1px solid #c3c4c7;
+	border-radius: 4px;
+	margin: 0 0 10px;
+}
+
+.dodo-panel__toggle {
+	align-items: center;
+	background: none;
+	border: 0;
+	border-bottom: 1px solid transparent;
+	color: #1d2327;
+	cursor: pointer;
+	display: flex;
+	font-size: 14px;
+	font-weight: 600;
+	gap: 9px;
+	margin: 0;
+	padding: 12px 14px;
+	text-align: left;
+	width: 100%;
+}
+
+.dodo-panel__toggle:hover,
+.dodo-panel__toggle:focus {
+	color: #2271b1;
+}
+
+.dodo-panel__toggle:focus-visible {
+	box-shadow: inset 0 0 0 2px #2271b1;
+	outline: none;
+}
+
+.dodo-panel.is-open > .dodo-panel__toggle {
+	border-bottom-color: #dcdcde;
+}
+
+.dodo-panel__caret {
+	color: #787c82;
+	flex: none;
+	font-size: 11px;
+	line-height: 1;
+	transition: transform 0.15s ease;
+}
+
+.dodo-panel.is-open .dodo-panel__caret {
+	transform: rotate(90deg);
+}
+
+.dodo-panel__count {
+	background: #f0f0f1;
+	border-radius: 9px;
+	color: #646970;
+	font-size: 11px;
+	font-variant-numeric: tabular-nums;
+	font-weight: 400;
+	margin-left: auto;
+	padding: 1px 9px;
+}
+
+.dodo-panel__body {
+	padding: 0 14px 8px;
+}
+
+.dodo-panel__body > p:first-child {
+	color: #646970;
+	margin-top: 12px;
+	max-width: 70ch;
+}
+
+.dodo-panel__body .form-table {
+	margin-top: 0;
+}
+
+.dodo-panel:not(.is-open) > .dodo-panel__body {
+	display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.dodo-panel__caret {
+		transition: none;
+	}
+}
+
+/* ---------------------------------------------------------------------------
+   Colour grid
+   --------------------------------------------------------------------------- */
+
+.dodo-colors__grid {
+	display: grid;
+	gap: 10px 18px;
+	grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+	max-width: 780px;
+}
+
+.dodo-colors__item {
+	align-items: center;
+	display: grid;
+	gap: 8px;
+	grid-template-columns: 1fr auto;
+}
+
+.dodo-colors__item label {
+	color: #50575e;
+	font-size: 12px;
+	line-height: 1.3;
+}
+
+.dodo-colors__item .wp-picker-container {
+	justify-self: end;
+}
+
+/* ---------------------------------------------------------------------------
+   Extra checkout questions
+   --------------------------------------------------------------------------- */
+
+.dodo-questions__head,
+.dodo-questions__row {
+	align-items: center;
+	display: grid;
+	gap: 8px;
+	grid-template-columns: 1.1fr 1.4fr 0.9fr 1.1fr 70px 30px;
+	max-width: 900px;
+}
+
+.dodo-questions__head {
+	color: #646970;
+	font-size: 11px;
+	letter-spacing: 0.04em;
+	margin-bottom: 6px;
+	text-transform: uppercase;
+}
+
+.dodo-questions__row {
+	margin-bottom: 8px;
+}
+
+.dodo-questions__row input[type="text"],
+.dodo-questions__row select {
+	margin: 0;
+	max-width: none;
+	width: 100%;
+}
+
+.dodo-questions__key {
+	font-family: Menlo, Consolas, monaco, monospace;
+	font-size: 12px;
+}
+
+.dodo-questions__required {
+	justify-self: center;
+}
+
+.dodo-questions__remove {
+	color: #b32d2e;
+	cursor: pointer;
+	font-size: 18px;
+	justify-self: center;
+	line-height: 1;
+	text-decoration: none;
+}
+
+.dodo-questions__remove:hover,
+.dodo-questions__remove:focus {
+	color: #8a2424;
+}
+
+.dodo-questions__options {
+	grid-column: 1 / -1;
+	margin: -2px 0 6px;
+}
+
+.dodo-questions__options label {
+	color: #646970;
+	display: flex;
+	align-items: center;
+	font-size: 12px;
+	gap: 8px;
+}
+
+.dodo-questions__options input[type="text"] {
+	flex: 1;
+	max-width: 420px;
+}
+
+.dodo-questions__empty {
+	color: #646970;
+	font-style: italic;
+	margin: 0 0 10px;
+}
+
+.dodo-questions__limit {
+	color: #646970;
+	font-size: 12px;
+	margin-left: 8px;
+}
+
+@media screen and (max-width: 782px) {
+	.dodo-questions__head {
+		display: none;
+	}
+
+	.dodo-questions__row {
+		grid-template-columns: 1fr 1fr;
+	}
+
+	.dodo-colors__item {
+		grid-template-columns: 1fr;
+	}
+
+	.dodo-colors__item .wp-picker-container {
+		justify-self: start;
+	}
+}
