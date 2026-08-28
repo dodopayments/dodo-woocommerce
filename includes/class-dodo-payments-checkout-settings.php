@@ -662,7 +662,7 @@ class Dodo_Payments_Checkout_Settings
             'form' => array(
                 'title' => __('Customer Details Sent To Checkout', 'dodo-payments-for-woocommerce'),
                 'type' => 'title',
-                'description' => __('Billing details WooCommerce already holds. Sending them saves customers re-entering the same information on the hosted checkout.', 'dodo-payments-for-woocommerce'),
+                'description' => __('Billing details WooCommerce already holds. Switch these on to save customers re-entering the same information on the hosted checkout.', 'dodo-payments-for-woocommerce'),
             ),
         );
 
@@ -670,10 +670,10 @@ class Dodo_Payments_Checkout_Settings
             'form' => array(
                 'title' => __('Billing Phone Number', 'dodo-payments-for-woocommerce'),
                 'type' => 'checkbox',
-                'default' => 'yes',
+                'default' => 'no',
                 'desc_tip' => false,
                 'label' => __('Send the customer\'s phone number', 'dodo-payments-for-woocommerce'),
-                'description' => __('Sent as the checkout session customer\'s phone number when WooCommerce has one on the order.', 'dodo-payments-for-woocommerce'),
+                'description' => __('Sent as the checkout session customer\'s phone number when WooCommerce has one on the order, so customers are not asked for it twice. Off by default.', 'dodo-payments-for-woocommerce'),
             ),
         );
 
@@ -681,10 +681,10 @@ class Dodo_Payments_Checkout_Settings
             'form' => array(
                 'title' => __('Company Name', 'dodo-payments-for-woocommerce'),
                 'type' => 'checkbox',
-                'default' => 'yes',
+                'default' => 'no',
                 'desc_tip' => false,
                 'label' => __('Send the billing company as the business name', 'dodo-payments-for-woocommerce'),
-                'description' => __('Used by Dodo Payments for B2B tax identification when the customer supplies a tax ID.', 'dodo-payments-for-woocommerce'),
+                'description' => __('Used by Dodo Payments for B2B tax identification when the customer supplies a tax ID. Off by default.', 'dodo-payments-for-woocommerce'),
             ),
         );
 

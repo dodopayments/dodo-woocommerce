@@ -6,7 +6,7 @@
 * Feature: brand the hosted checkout from the settings page -- theme, language, pay button text, corner radius, fonts, and 16 colours for each of light and dark mode.
 * Feature: restrict accepted payment methods, pin a billing currency, force 3-D Secure, show saved payment methods, and set an INR e-mandate minimum.
 * Feature: ask customers up to five extra questions on the hosted checkout, with text, number, email, URL, date, dropdown and yes/no field types.
-* Feature: send the order's billing phone number and company to the hosted checkout so customers are not asked for them twice. Both are on by default and can be switched off.
+* Feature: optionally send the order's billing phone number and company to the hosted checkout so customers are not asked for them twice. Both are off by default, matching the Checkout Sessions API defaults.
 * Enhancement: the settings page is now grouped into collapsible sections, and remembers which ones you left open.
 * Migration: checkout sessions now use the stackable `discount_codes` field in place of the deprecated `discount_code`.
 * Dev: new `dodo_payments_checkout_session_request` filter over the entire checkout session request body, for the API fields the settings page does not expose.
