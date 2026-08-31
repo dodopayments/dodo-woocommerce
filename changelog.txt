@@ -2,7 +2,7 @@
 
 2026-08-21 - version 0.6.0
 * Feature: configure the hosted checkout's return URL from the settings page, with `{order_id}`, `{order_key}` and `{order_number}` placeholders. Leaving it empty keeps the WooCommerce order received page.
-* Feature: send customers who abandon the hosted checkout back to your store. Defaults to the order pay page so they can retry; previously no cancel URL was sent at all.
+* Feature: optionally send customers who abandon the hosted checkout back to your store -- to the order pay page so they can retry, to the cart, or to a URL of your choosing. Off by default, matching the Checkout Sessions API.
 * Feature: brand the hosted checkout from the settings page -- theme, language, pay button text, corner radius, fonts, and 16 colours for each of light and dark mode.
 * Feature: restrict accepted payment methods, pin a billing currency, force 3-D Secure, show saved payment methods, and set an INR e-mandate minimum.
 * Feature: ask customers up to five extra questions on the hosted checkout, with text, number, email, URL, date, dropdown and yes/no field types.
