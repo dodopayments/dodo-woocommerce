@@ -45,6 +45,16 @@ class Dodo_Payments_Checkout_Settings
     const MAX_PAY_BUTTON_TEXT = 100;
 
     /**
+     * Order placeholders accepted in the configurable redirect URLs.
+     *
+     * @return string[]
+     */
+    private static function url_placeholders()
+    {
+        return array('{order_id}', '{order_key}', '{order_number}');
+    }
+
+    /**
      * Colour tokens accepted by `theme_config.light` / `theme_config.dark`.
      *
      * Keyed by API field name; the value is the admin-facing label. Rendered as a
@@ -835,14 +845,13 @@ class Dodo_Payments_Checkout_Settings
      */
     public static function apply_url_placeholders($url, $order)
     {
-        return strtr(
-            $url,
-            array(
-                '{order_id}' => (string) $order->get_id(),
-                '{order_key}' => (string) $order->get_order_key(),
-                '{order_number}' => (string) $order->get_order_number(),
-            )
+        $values = array(
+            (string) $order->get_id(),
+            (string) $order->get_order_key(),
+            (string) $order->get_order_number(),
         );
+
+        return strtr($url, array_combine(self::url_placeholders(), $values));
     }
 
     /**
@@ -933,10 +942,17 @@ class Dodo_Payments_Checkout_Settings
     }
 
     /**
-     * Sanitizes a URL option.
+     * Sanitizes a URL option, preserving the order placeholders.
      *
-     * Placeholder braces survive `esc_url_raw`, so `{order_id}` and friends are
-     * preserved without needing to be stripped and restored.
+     * `esc_url_raw()` strips any character outside the set `esc_url()` permits,
+     * and `{`/`}` are not in it -- passing `?q={order_id}` straight through
+     * silently yields `?q=order_id`, destroying the placeholder while leaving a
+     * plausible-looking URL behind.
+     *
+     * Each placeholder is therefore swapped for an alphanumeric sentinel that
+     * survives escaping, and restored afterwards. The sentinel carries an index
+     * rather than the token's own name so that a value already containing the
+     * sentinel text cannot be rewritten into a different placeholder.
      *
      * @param mixed $value Raw posted value.
      * @return string
@@ -949,7 +965,24 @@ class Dodo_Payments_Checkout_Settings
 
         $value = trim(wp_unslash($value));
 
-        return '' === $value ? '' : esc_url_raw($value);
+        if ('' === $value) {
+            return '';
+        }
+
+        $sentinels = array();
+
+        foreach (self::url_placeholders() as $index => $placeholder) {
+            $sentinels[$placeholder] = 'dodoplaceholder' . $index . 'x';
+        }
+
+        // Remove any pre-existing sentinel text first, so a URL that happens to
+        // contain it cannot be restored into a placeholder it never had.
+        $value = str_replace(array_values($sentinels), '', $value);
+
+        $value = strtr($value, $sentinels);
+        $value = esc_url_raw($value);
+
+        return strtr($value, array_flip($sentinels));
     }
 
     /**
