@@ -291,15 +291,15 @@ class Dodo_Payments_Checkout_Settings
             'form' => array(
                 'title' => __('If the customer cancels', 'dodo-payments-for-woocommerce'),
                 'type' => 'select',
-                'default' => 'none',
+                'default' => 'cancel_order',
                 'desc_tip' => false,
                 'options' => array(
-                    'none' => __('Do not send a cancel URL (default)', 'dodo-payments-for-woocommerce'),
+                    'cancel_order' => __('Cancel the order and return to the cart (default)', 'dodo-payments-for-woocommerce'),
                     'pay_page' => __('Return to the order pay page', 'dodo-payments-for-woocommerce'),
-                    'cancel_order' => __('Cancel the order and return to the cart', 'dodo-payments-for-woocommerce'),
                     'custom' => __('Send a custom URL', 'dodo-payments-for-woocommerce'),
+                    'none' => __('Do not send a cancel URL', 'dodo-payments-for-woocommerce'),
                 ),
-                'description' => __('Where customers go if they abandon the hosted checkout. Left at the default nothing is sent, matching the Dodo Payments API, and customers have no route back to your store. The order pay page is the usual choice: it lets them retry payment on the same order.', 'dodo-payments-for-woocommerce'),
+                'description' => __('Where customers go if they abandon the hosted checkout. By default the order is cancelled and its items are restored to the cart, so they can start again with nothing left pending. Choose the order pay page instead to keep the order alive for them to retry, or send nothing at all to leave them on the Dodo Payments side with no route back.', 'dodo-payments-for-woocommerce'),
             ),
         );
 
