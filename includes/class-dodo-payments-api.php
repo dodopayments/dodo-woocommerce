@@ -296,6 +296,28 @@ class Dodo_Payments_API
             $request = array_merge($this->checkout_options, $request);
         }
 
+        // `confirm` tells the API to settle every detail up front, so anything
+        // the order is missing becomes a 422 rather than a prompt on the hosted
+        // page. Check first and fail with a message naming the missing fields:
+        // the API's own error does not identify them, which leaves a merchant
+        // staring at an opaque failure on every order.
+        if (!empty($request['confirm'])) {
+            $missing = Dodo_Payments_Checkout_Settings::missing_confirm_fields(
+                $order,
+                !empty($request['minimal_address'])
+            );
+
+            if (!empty($missing)) {
+                throw new Exception(
+                    esc_html(sprintf(
+                        /* translators: %s: comma-separated list of missing billing fields */
+                        __('Failed to create checkout session: "Finalise Details At Checkout" is enabled but the order is missing %s. Either collect these fields at your WooCommerce checkout or disable that setting.', 'dodo-payments-for-woocommerce'),
+                        implode(', ', $missing)
+                    ))
+                );
+            }
+        }
+
         /**
          * Filters the Checkout Session feature flags before the session is created.
          *

@@ -45,6 +45,59 @@ class Dodo_Payments_Checkout_Settings
     const MAX_PAY_BUTTON_TEXT = 100;
 
     /**
+     * Billing fields Dodo Payments needs before a session can be finalised.
+     *
+     * `confirm` tells the API to settle every detail at session-creation time
+     * instead of letting the hosted page collect what is missing, so anything
+     * absent from the WooCommerce order becomes a hard error rather than a
+     * prompt. `minimal_address` narrows the address portion to the zipcode.
+     *
+     * @param bool $minimal_address Whether only the zipcode is required.
+     * @return array<string, string> Getter method name => admin-facing label.
+     */
+    public static function confirm_required_fields($minimal_address = false)
+    {
+        $fields = array(
+            'get_billing_email' => __('Email', 'dodo-payments-for-woocommerce'),
+            'get_billing_country' => __('Country', 'dodo-payments-for-woocommerce'),
+            'get_billing_postcode' => __('Postcode', 'dodo-payments-for-woocommerce'),
+        );
+
+        if (!$minimal_address) {
+            $fields['get_billing_address_1'] = __('Street address', 'dodo-payments-for-woocommerce');
+            $fields['get_billing_city'] = __('Town / City', 'dodo-payments-for-woocommerce');
+        }
+
+        return $fields;
+    }
+
+    /**
+     * Lists the billing details an order is missing for a confirmed session.
+     *
+     * @param WC_Order $order            Order the checkout session is for.
+     * @param bool     $minimal_address  Whether only the zipcode is required.
+     * @return string[] Admin-facing labels of the missing fields.
+     */
+    public static function missing_confirm_fields($order, $minimal_address = false)
+    {
+        $missing = array();
+
+        foreach (self::confirm_required_fields($minimal_address) as $getter => $label) {
+            if (!method_exists($order, $getter)) {
+                continue;
+            }
+
+            $value = $order->{$getter}();
+
+            if (!is_string($value) || '' === trim($value)) {
+                $missing[] = $label;
+            }
+        }
+
+        return $missing;
+    }
+
+    /**
      * Order placeholders accepted in the configurable redirect URLs.
      *
      * @return string[]
@@ -291,15 +344,15 @@ class Dodo_Payments_Checkout_Settings
             'form' => array(
                 'title' => __('If the customer cancels', 'dodo-payments-for-woocommerce'),
                 'type' => 'select',
-                'default' => 'cancel_order',
+                'default' => 'none',
                 'desc_tip' => false,
                 'options' => array(
-                    'cancel_order' => __('Cancel the order and return to the cart (default)', 'dodo-payments-for-woocommerce'),
+                    'none' => __('Do not send a cancel URL (default)', 'dodo-payments-for-woocommerce'),
                     'pay_page' => __('Return to the order pay page', 'dodo-payments-for-woocommerce'),
+                    'cancel_order' => __('Cancel the order and return to the cart', 'dodo-payments-for-woocommerce'),
                     'custom' => __('Send a custom URL', 'dodo-payments-for-woocommerce'),
-                    'none' => __('Do not send a cancel URL', 'dodo-payments-for-woocommerce'),
                 ),
-                'description' => __('Where customers go if they abandon the hosted checkout. By default the order is cancelled and its items are restored to the cart, so they can start again with nothing left pending. Choose the order pay page instead to keep the order alive for them to retry, or send nothing at all to leave them on the Dodo Payments side with no route back.', 'dodo-payments-for-woocommerce'),
+                'description' => __('Where customers go if they abandon the hosted checkout. Left at the default nothing is sent, matching the Dodo Payments API, and customers have no route back to your store. The order pay page keeps the order alive so they can retry payment on it; cancelling returns the items to their cart instead.', 'dodo-payments-for-woocommerce'),
             ),
         );
 
@@ -622,6 +675,22 @@ class Dodo_Payments_Checkout_Settings
             ),
         );
 
+        $schema['confirm'] = array(
+            'path' => 'confirm',
+            'cast' => 'bool',
+            'form' => array(
+                'title' => __('Finalise Details At Checkout', 'dodo-payments-for-woocommerce'),
+                'type' => 'select',
+                'default' => '',
+                'desc_tip' => false,
+                'options' => $tristate,
+                'description' => self::with_api_default(
+                    __('Finalise the order\'s details when the checkout session is created, rather than letting the hosted page collect what is missing. <strong>Only enable this if your WooCommerce checkout collects the customer\'s full billing address.</strong> If any required detail is missing, Dodo Payments rejects the session and the customer sees a checkout error instead of a payment page.', 'dodo-payments-for-woocommerce'),
+                    false
+                ),
+            ),
+        );
+
         $schema['minimal_address'] = array(
             'path' => 'minimal_address',
             'cast' => 'bool',
@@ -632,7 +701,7 @@ class Dodo_Payments_Checkout_Settings
                 'desc_tip' => false,
                 'options' => $tristate,
                 'description' => self::with_api_default(
-                    __('Per the Dodo Payments API: "Only zipcode required if confirm = true".', 'dodo-payments-for-woocommerce'),
+                    __('Require only the zipcode at checkout. Applies only when "Finalise Details At Checkout" above is enabled; on its own this setting has no effect.', 'dodo-payments-for-woocommerce'),
                     false
                 ),
             ),
