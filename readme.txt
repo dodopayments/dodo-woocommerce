@@ -140,6 +140,7 @@ Contact the Dodo Payments support team at [support@dodopayments.com](mailto:supp
 * Feature: configure the hosted checkout's return URL from the settings page, with `{order_id}`, `{order_key}` and `{order_number}` placeholders. Leaving it empty keeps the WooCommerce order received page.
 * Feature: optionally send customers who abandon the hosted checkout back to your store -- to the order pay page so they can retry, to the cart, or to a URL of your choosing. Off by default, matching the Checkout Sessions API.
 * Feature: optionally finalise the order's details when the checkout session is created rather than letting the hosted page collect what is missing. Requires a WooCommerce checkout that captures the full billing address; the plugin checks the order first and fails with a message naming any missing fields rather than passing a request the API will reject.
+* Feature: require only the zipcode at the hosted checkout, via the API's minimal address option.
 * Feature: brand the hosted checkout from the settings page -- theme, language, pay button text, corner radius, fonts, and 16 colours for each of light and dark mode.
 * Feature: restrict accepted payment methods, pin a billing currency, force 3-D Secure, show saved payment methods, and set an INR e-mandate minimum.
 * Feature: ask customers up to five extra questions on the hosted checkout, with text, number, email, URL, date, dropdown and yes/no field types.
