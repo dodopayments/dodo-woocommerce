@@ -50,7 +50,10 @@ class Dodo_Payments_Checkout_Settings
      * `confirm` tells the API to settle every detail at session-creation time
      * instead of letting the hosted page collect what is missing, so anything
      * absent from the WooCommerce order becomes a hard error rather than a
-     * prompt. `minimal_address` narrows the address portion to the zipcode.
+     * prompt. `minimal_address` narrows the address portion to the zipcode --
+     * it also relaxes the hosted page's own collection independently of
+     * `confirm`, despite the API reference describing it as conditional on it,
+     * but only its effect on this precondition check matters here.
      *
      * @param bool $minimal_address Whether only the zipcode is required.
      * @return array<string, string> Getter method name => admin-facing label.
@@ -701,7 +704,7 @@ class Dodo_Payments_Checkout_Settings
                 'desc_tip' => false,
                 'options' => $tristate,
                 'description' => self::with_api_default(
-                    __('Require only the zipcode at checkout. Applies only when "Finalise Details At Checkout" above is enabled; on its own this setting has no effect.', 'dodo-payments-for-woocommerce'),
+                    __('Require only the zipcode at checkout. Works on its own; the API reference ties this to "Finalise Details At Checkout", but in practice it applies either way.', 'dodo-payments-for-woocommerce'),
                     false
                 ),
             ),
