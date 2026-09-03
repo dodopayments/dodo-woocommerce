@@ -350,12 +350,12 @@ class Dodo_Payments_Checkout_Settings
                 'default' => 'none',
                 'desc_tip' => false,
                 'options' => array(
-                    'none' => __('Do not send a cancel URL (default)', 'dodo-payments-for-woocommerce'),
                     'pay_page' => __('Return to the order pay page', 'dodo-payments-for-woocommerce'),
                     'cancel_order' => __('Cancel the order and return to the cart', 'dodo-payments-for-woocommerce'),
                     'custom' => __('Send a custom URL', 'dodo-payments-for-woocommerce'),
+                    'none' => __('Do not send a cancel URL', 'dodo-payments-for-woocommerce'),
                 ),
-                'description' => __('Where customers go if they abandon the hosted checkout. Left at the default nothing is sent, matching the Dodo Payments API, and customers have no route back to your store. The order pay page keeps the order alive so they can retry payment on it; cancelling returns the items to their cart instead.', 'dodo-payments-for-woocommerce'),
+                'description' => __('Customers who abandon the hosted checkout are sent here. The order pay page lets them retry payment on the same order.', 'dodo-payments-for-woocommerce'),
             ),
         );
 
@@ -744,7 +744,7 @@ class Dodo_Payments_Checkout_Settings
             'form' => array(
                 'title' => __('Customer Details Sent To Checkout', 'dodo-payments-for-woocommerce'),
                 'type' => 'title',
-                'description' => __('Billing details WooCommerce already holds. Switch these on to save customers re-entering the same information on the hosted checkout.', 'dodo-payments-for-woocommerce'),
+                'description' => __('Billing details WooCommerce already holds. Sending them saves customers re-entering the same information on the hosted checkout.', 'dodo-payments-for-woocommerce'),
             ),
         );
 
@@ -755,7 +755,7 @@ class Dodo_Payments_Checkout_Settings
                 'default' => 'no',
                 'desc_tip' => false,
                 'label' => __('Send the customer\'s phone number', 'dodo-payments-for-woocommerce'),
-                'description' => __('Sent as the checkout session customer\'s phone number when WooCommerce has one on the order, so customers are not asked for it twice. Off by default.', 'dodo-payments-for-woocommerce'),
+                'description' => __('Sent as the checkout session customer\'s phone number when WooCommerce has one on the order.', 'dodo-payments-for-woocommerce'),
             ),
         );
 
@@ -766,7 +766,7 @@ class Dodo_Payments_Checkout_Settings
                 'default' => 'no',
                 'desc_tip' => false,
                 'label' => __('Send the billing company as the business name', 'dodo-payments-for-woocommerce'),
-                'description' => __('Used by Dodo Payments for B2B tax identification when the customer supplies a tax ID. Off by default.', 'dodo-payments-for-woocommerce'),
+                'description' => __('Used by Dodo Payments for B2B tax identification when the customer supplies a tax ID.', 'dodo-payments-for-woocommerce'),
             ),
         );
 
