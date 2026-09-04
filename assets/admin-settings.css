@@ -50,7 +50,7 @@
 .dodo-panel__caret {
 	color: #787c82;
 	flex: none;
-	font-size: 11px;
+	font-size: 16px;
 	line-height: 1;
 	transition: transform 0.15s ease;
 }
