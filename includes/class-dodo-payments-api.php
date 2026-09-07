@@ -5,6 +5,11 @@ class Dodo_Payments_API
     private const MAX_PRODUCT_NAME_LENGTH = 100;
     private const MAX_PRODUCT_DESCRIPTION_LENGTH = 999;
 
+    /**
+     * Maximum length of `customer_business_name` per the Checkout Sessions schema.
+     */
+    private const MAX_BUSINESS_NAME_LENGTH = 250;
+
     private bool $testmode;
     private string $api_key;
     /**
@@ -259,13 +264,6 @@ class Dodo_Payments_API
             }
         }
 
-        if ($this->send_customer_business_name) {
-            $business_name = self::trim_to_null($order->get_billing_company());
-            if ($business_name !== null) {
-                $request['customer_business_name'] = $business_name;
-            }
-        }
-
         if ($cancel_url !== null && $cancel_url !== '') {
             $request['cancel_url'] = $cancel_url;
         }
@@ -273,6 +271,19 @@ class Dodo_Payments_API
         $tax_id = self::get_order_tax_id($order);
         if ($tax_id !== null) {
             $request['tax_id'] = $tax_id;
+        }
+
+        // `customer_business_name` is only valid alongside a `tax_id` -- the API
+        // rejects a business name on its own. WooCommerce core collects Company
+        // as a standard optional billing field but has no tax ID field at all,
+        // so sending the company unconditionally would fail exactly those orders
+        // where a customer filled Company in and no VAT extension is installed.
+        // Gate on the tax ID rather than hand the API a request it must refuse.
+        if ($this->send_customer_business_name && $tax_id !== null) {
+            $business_name = self::trim_to_null($order->get_billing_company());
+            if ($business_name !== null) {
+                $request['customer_business_name'] = mb_substr($business_name, 0, self::MAX_BUSINESS_NAME_LENGTH);
+            }
         }
 
         // `discount_code` is deprecated in favour of the stackable `discount_codes`

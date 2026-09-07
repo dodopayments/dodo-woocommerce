@@ -8,7 +8,7 @@
 * Feature: set the hosted checkout's theme and language from the settings page.
 * Feature: restrict accepted payment methods, pin a billing currency, force 3-D Secure, show saved payment methods, and set an INR e-mandate minimum.
 * Feature: ask customers up to five extra questions on the hosted checkout, with text, number, email, URL, date, dropdown and yes/no field types.
-* Feature: optionally send the order's billing phone number and company to the hosted checkout so customers are not asked for them twice. Both are off by default, matching the Checkout Sessions API defaults.
+* Feature: optionally send the order's billing phone number and company to the hosted checkout so customers are not asked for them twice. Both are off by default, matching the Checkout Sessions API defaults. The company is sent only on orders that also carry a tax ID, which Dodo Payments requires alongside a business name.
 * Enhancement: the settings page is now grouped into collapsible sections, and remembers which ones you left open.
 * Enhancement: a "Reset to defaults" button on the settings page restores every checkout option and feature flag, keeping the general settings, API keys and webhook signing keys.
 * Migration: checkout sessions now use the stackable `discount_codes` field in place of the deprecated `discount_code`.
