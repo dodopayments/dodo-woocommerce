@@ -35,6 +35,16 @@ class Dodo_Payments_Checkout_Settings
     const PREFIX = 'checkout_';
 
     /**
+     * Class marked onto every section heading that should render collapsible.
+     *
+     * The admin script keys off this rather than off the option key prefix, so
+     * that which headings fold is a deliberate choice at the point the field is
+     * declared. `PREFIX` would additionally have matched the 0.5.0
+     * `checkout_feature_flags_section` key by coincidence.
+     */
+    const SECTION_CLASS = 'dodo-section';
+
+    /**
      * Maximum number of `custom_fields` entries the API accepts per session.
      */
     const MAX_CUSTOM_FIELDS = 5;
@@ -290,6 +300,13 @@ class Dodo_Payments_Checkout_Settings
     }
 
     /**
+     * Memoised return value of `schema()`, keyed by locale.
+     *
+     * @var array<string, array<string, array<string, mixed>>>
+     */
+    private static $schema_cache = array();
+
+    /**
      * The complete option schema.
      *
      * Each entry carries the WooCommerce form field definition under `form`, plus
@@ -302,10 +319,22 @@ class Dodo_Payments_Checkout_Settings
      *
      * Section headings are plain `title` fields with neither `path` nor `cast`.
      *
+     * Memoised: building this walks 105 payment method labels, 150 currency codes
+     * and around 120 translation lookups, and it is read more than once per
+     * request -- by `form_fields()` when the gateway registers its fields, and
+     * again by `build_request_options()`. The cache is keyed by locale so a
+     * `switch_to_locale()` between those reads cannot serve stale labels.
+     *
      * @return array<string, array<string, mixed>>
      */
     public static function schema()
     {
+        $locale = function_exists('determine_locale') ? determine_locale() : '';
+
+        if (isset(self::$schema_cache[$locale])) {
+            return self::$schema_cache[$locale];
+        }
+
         $tristate = self::tristate_options();
 
         $payment_methods = array();
@@ -355,7 +384,7 @@ class Dodo_Payments_Checkout_Settings
                     'custom' => __('Send a custom URL', 'dodo-payments-for-woocommerce'),
                     'none' => __('Do not send a cancel URL', 'dodo-payments-for-woocommerce'),
                 ),
-                'description' => __('Customers who abandon the hosted checkout are sent here. The order pay page lets them retry payment on the same order.', 'dodo-payments-for-woocommerce'),
+                'description' => __('Customers who abandon the hosted checkout are sent here. The order pay page lets them retry payment on the same order. Cancelling the order instead restores the items to the cart, but its link carries a WooCommerce security token that expires after about a day, so a customer returning later than that lands on an expired link.', 'dodo-payments-for-woocommerce'),
             ),
         );
 
@@ -404,7 +433,7 @@ class Dodo_Payments_Checkout_Settings
                 'title' => __('Force Language', 'dodo-payments-for-woocommerce'),
                 'type' => 'text',
                 'default' => '',
-                'sanitize_callback' => array(__CLASS__, 'sanitize_text'),
+                'sanitize_callback' => array(__CLASS__, 'sanitize_language'),
                 'desc_tip' => false,
                 'placeholder' => __('Customer\'s own language', 'dodo-payments-for-woocommerce'),
                 'description' => __('A language tag such as <code>de</code> or <code>pt-BR</code>. Leave empty to let Dodo Payments choose.', 'dodo-payments-for-woocommerce'),
@@ -477,10 +506,10 @@ class Dodo_Payments_Checkout_Settings
                 'title' => __('Corner Radius', 'dodo-payments-for-woocommerce'),
                 'type' => 'text',
                 'default' => '',
-                'sanitize_callback' => array(__CLASS__, 'sanitize_text'),
+                'sanitize_callback' => array(__CLASS__, 'sanitize_radius'),
                 'desc_tip' => false,
                 'placeholder' => '8px',
-                'description' => __('Corner rounding applied to buttons and inputs, as a CSS length.', 'dodo-payments-for-woocommerce'),
+                'description' => __('Corner rounding applied to buttons and inputs, as a CSS length such as <code>8px</code> or <code>0.5rem</code>. Other units are discarded.', 'dodo-payments-for-woocommerce'),
             ),
         );
 
@@ -704,7 +733,7 @@ class Dodo_Payments_Checkout_Settings
                 'desc_tip' => false,
                 'options' => $tristate,
                 'description' => self::with_api_default(
-                    __('Require only the zipcode at checkout. Works on its own; the API reference ties this to "Finalise Details At Checkout", but in practice it applies either way.', 'dodo-payments-for-woocommerce'),
+                    __('Ask for only the country and, where tax rules require it, the ZIP or postal code. This changes what the hosted checkout asks the customer for; the plugin still sends the full billing address WooCommerce already holds. Works on its own -- the API reference ties this to "Finalise Details At Checkout", but in practice it applies either way.', 'dodo-payments-for-woocommerce'),
                     false
                 ),
             ),
@@ -755,7 +784,7 @@ class Dodo_Payments_Checkout_Settings
                 'default' => 'no',
                 'desc_tip' => false,
                 'label' => __('Send the customer\'s phone number', 'dodo-payments-for-woocommerce'),
-                'description' => __('Sent as the checkout session customer\'s phone number when WooCommerce has one on the order.', 'dodo-payments-for-woocommerce'),
+                'description' => __('Sent as the checkout session customer\'s phone number when WooCommerce has one on the order. Dodo Payments expects an international number including the country code, and WooCommerce does not enforce that, so leave this off unless your checkout collects the phone in that format.', 'dodo-payments-for-woocommerce'),
             ),
         );
 
@@ -766,11 +795,93 @@ class Dodo_Payments_Checkout_Settings
                 'default' => 'no',
                 'desc_tip' => false,
                 'label' => __('Send the billing company as the business name', 'dodo-payments-for-woocommerce'),
-                'description' => __('Used by Dodo Payments for B2B tax identification when the customer supplies a tax ID.', 'dodo-payments-for-woocommerce'),
+                'description' => __('Used by Dodo Payments for B2B tax identification. Dodo Payments only accepts a business name alongside a tax ID, so the company is sent only on orders that carry one. WooCommerce core does not collect a tax ID; it comes from a VAT extension, or from your own code via the <code>dodo_payments_order_tax_id_meta_keys</code> filter.', 'dodo-payments-for-woocommerce'),
             ),
         );
 
+        // Applied here rather than on each definition so that a section or a
+        // dropdown added later cannot forget either -- a missed section class
+        // renders as a flat heading, a missed enum check persists whatever was
+        // posted.
+        foreach ($schema as $key => $definition) {
+            $type = isset($definition['form']['type']) ? $definition['form']['type'] : '';
+
+            if ('title' === $type) {
+                $existing = isset($definition['form']['class']) ? $definition['form']['class'] . ' ' : '';
+                $schema[$key]['form']['class'] = $existing . self::SECTION_CLASS;
+                continue;
+            }
+
+            $is_enum = in_array($type, array('select', 'multiselect'), true);
+
+            if (!$is_enum || isset($definition['form']['sanitize_callback']) || empty($definition['form']['options'])) {
+                continue;
+            }
+
+            $schema[$key]['form']['sanitize_callback'] = self::enum_sanitizer(
+                array_map('strval', array_keys($definition['form']['options'])),
+                isset($definition['form']['default']) ? $definition['form']['default'] : '',
+                'multiselect' === $type
+            );
+        }
+
+        self::$schema_cache[$locale] = $schema;
+
         return $schema;
+    }
+
+    /**
+     * Builds a sanitizer that keeps only values present in a field's own options.
+     *
+     * WooCommerce's own `select` and `multiselect` validators only `wc_clean()`
+     * the posted value, so a stale or fabricated option is persisted verbatim and
+     * then sent to the API. The page is capability-gated, so this is about not
+     * quietly storing an enum member the API has since dropped rather than about
+     * privilege.
+     *
+     * Note that supplying `sanitize_callback` replaces WooCommerce's type
+     * validator rather than running after it, so the returned closure is handed
+     * the raw posted value and unslashes it itself. Matching against a known
+     * option list is stricter than the `wc_clean()` it displaces.
+     *
+     * @param string[] $allowed  Permitted values.
+     * @param mixed    $fallback Value to store when a single selection is rejected.
+     * @param bool     $multi    Whether the field stores a list.
+     * @return callable
+     */
+    private static function enum_sanitizer($allowed, $fallback, $multi)
+    {
+        return function ($value) use ($allowed, $fallback, $multi) {
+            if ($multi) {
+                if (!is_array($value)) {
+                    return array();
+                }
+
+                $clean = array();
+
+                foreach ($value as $entry) {
+                    if (!is_scalar($entry)) {
+                        continue;
+                    }
+
+                    $entry = (string) wp_unslash((string) $entry);
+
+                    if (in_array($entry, $allowed, true) && !in_array($entry, $clean, true)) {
+                        $clean[] = $entry;
+                    }
+                }
+
+                return $clean;
+            }
+
+            if (!is_scalar($value)) {
+                return $fallback;
+            }
+
+            $value = (string) wp_unslash((string) $value);
+
+            return in_array($value, $allowed, true) ? $value : $fallback;
+        };
     }
 
     /**
@@ -1014,6 +1125,50 @@ class Dodo_Payments_Checkout_Settings
     }
 
     /**
+     * Sanitizes the corner radius, which must be a CSS length.
+     *
+     * Reaches `theme_config` as verbatim as the colours next to it, so it is
+     * constrained the same way rather than trusted: `sanitize_text_field()`
+     * leaves `;`, `{`, `}` and `/*` intact, and what the hosted checkout does
+     * with those is not this plugin's call to make. Anything that is not a
+     * plain CSS length is discarded.
+     *
+     * @param mixed $value Raw posted value.
+     * @return string
+     */
+    public static function sanitize_radius($value)
+    {
+        $value = self::sanitize_text($value);
+
+        if ('' === $value) {
+            return '';
+        }
+
+        return preg_match('/^(?:0|[0-9]*\.?[0-9]+(?:px|rem|em|%))$/', $value) ? $value : '';
+    }
+
+    /**
+     * Sanitizes the forced language, which must be a BCP 47-style language tag.
+     *
+     * Same reasoning as the radius: the value is passed through to the API, so
+     * the documented shape (`de`, `pt-BR`) is enforced here instead of accepting
+     * arbitrary text.
+     *
+     * @param mixed $value Raw posted value.
+     * @return string
+     */
+    public static function sanitize_language($value)
+    {
+        $value = self::sanitize_text($value);
+
+        if ('' === $value) {
+            return '';
+        }
+
+        return preg_match('/^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/', $value) ? $value : '';
+    }
+
+    /**
      * Sanitizes a URL option, preserving the order placeholders.
      *
      * `esc_url_raw()` strips any character outside the set `esc_url()` permits,
@@ -1025,6 +1180,11 @@ class Dodo_Payments_Checkout_Settings
      * survives escaping, and restored afterwards. The sentinel carries an index
      * rather than the token's own name so that a value already containing the
      * sentinel text cannot be rewritten into a different placeholder.
+     *
+     * Only the supported placeholders are protected. A misspelled token such as
+     * `{order_ID}` loses its braces here, which is deliberate: it degrades to
+     * something URL-shaped instead of sending literal braces to the API and on
+     * to every customer.
      *
      * @param mixed $value Raw posted value.
      * @return string
@@ -1125,12 +1285,31 @@ class Dodo_Payments_Checkout_Settings
     }
 
     /**
+     * Surfaces a settings error to the admin, when running inside wp-admin.
+     *
+     * The sanitizers below drop or rewrite rows the API would reject. Doing that
+     * silently leaves the admin looking at a settings page that disagrees with
+     * what they typed and no indication why, so each such decision is reported.
+     *
+     * @param string $message Admin-facing message.
+     * @return void
+     */
+    private static function add_error($message)
+    {
+        if (class_exists('WC_Admin_Settings')) {
+            WC_Admin_Settings::add_error($message);
+        }
+    }
+
+    /**
      * Sanitizes the posted custom field rows.
      *
-     * Rows without a key or label are dropped rather than rejected -- the repeater
-     * always posts one blank row when the admin adds and then abandons an entry.
-     * Duplicate keys are collapsed to the first occurrence, and the whole list is
-     * truncated to the API's maximum.
+     * Rows without a key or label are dropped silently -- the repeater always
+     * posts one blank row when the admin adds and then abandons an entry, so
+     * complaining about those would be noise. Every other correction is reported:
+     * duplicate keys, rows past the API's maximum, and dropdowns with no choices,
+     * all of which would otherwise leave the admin guessing why the saved table
+     * does not match what they submitted.
      *
      * @param mixed $value Raw posted value.
      * @return array<int, array<string, mixed>>
@@ -1144,6 +1323,7 @@ class Dodo_Payments_Checkout_Settings
         $types = self::custom_field_types();
         $rows = array();
         $seen = array();
+        $dropped = 0;
 
         foreach ($value as $row) {
             if (!is_array($row)) {
@@ -1153,7 +1333,21 @@ class Dodo_Payments_Checkout_Settings
             $key = isset($row['key']) ? sanitize_key(wp_unslash($row['key'])) : '';
             $label = isset($row['label']) ? sanitize_text_field(wp_unslash($row['label'])) : '';
 
-            if ('' === $key || '' === $label || isset($seen[$key])) {
+            if ('' === $key || '' === $label) {
+                continue;
+            }
+
+            if (isset($seen[$key])) {
+                self::add_error(sprintf(
+                    /* translators: %s: the duplicated custom field key */
+                    __('Dodo Payments: extra checkout question "%s" appears more than once. Keys must be unique, so only the first was kept.', 'dodo-payments-for-woocommerce'),
+                    $key
+                ));
+                continue;
+            }
+
+            if (count($rows) >= self::MAX_CUSTOM_FIELDS) {
+                ++$dropped;
                 continue;
             }
 
@@ -1162,6 +1356,25 @@ class Dodo_Payments_Checkout_Settings
             $type = isset($row['field_type']) ? sanitize_text_field(wp_unslash($row['field_type'])) : 'text';
             if (!isset($types[$type])) {
                 $type = 'text';
+            }
+
+            $options = array();
+            if ('dropdown' === $type) {
+                $raw_options = isset($row['options']) ? sanitize_text_field(wp_unslash($row['options'])) : '';
+                $options = array_values(array_unique(array_filter(array_map('trim', explode(',', $raw_options)))));
+
+                // A dropdown with nothing to choose from is not a coherent
+                // request. Accepting it here would push the failure out to a real
+                // customer's checkout, long after the admin saw the page save
+                // cleanly, so downgrade the row to a text question instead.
+                if (empty($options)) {
+                    self::add_error(sprintf(
+                        /* translators: %s: the custom field key */
+                        __('Dodo Payments: extra checkout question "%s" is a dropdown with no choices, so it was saved as a text question. Add comma-separated choices to make it a dropdown.', 'dodo-payments-for-woocommerce'),
+                        $key
+                    ));
+                    $type = 'text';
+                }
             }
 
             $field = array(
@@ -1176,20 +1389,25 @@ class Dodo_Payments_Checkout_Settings
                 $field['placeholder'] = $placeholder;
             }
 
-            if ('dropdown' === $type) {
-                $options = isset($row['options']) ? sanitize_text_field(wp_unslash($row['options'])) : '';
-                $options = array_values(array_filter(array_map('trim', explode(',', $options))));
-
-                if (!empty($options)) {
-                    $field['options'] = $options;
-                }
+            if ('dropdown' === $type && !empty($options)) {
+                $field['options'] = $options;
             }
 
             $rows[] = $field;
+        }
 
-            if (count($rows) >= self::MAX_CUSTOM_FIELDS) {
-                break;
-            }
+        if ($dropped > 0) {
+            self::add_error(sprintf(
+                /* translators: 1: maximum number of custom fields, 2: number of questions discarded */
+                _n(
+                    'Dodo Payments: the hosted checkout accepts at most %1$d extra questions, so %2$d was discarded.',
+                    'Dodo Payments: the hosted checkout accepts at most %1$d extra questions, so %2$d were discarded.',
+                    $dropped,
+                    'dodo-payments-for-woocommerce'
+                ),
+                self::MAX_CUSTOM_FIELDS,
+                $dropped
+            ));
         }
 
         return $rows;
@@ -1202,6 +1420,11 @@ class Dodo_Payments_Checkout_Settings
     /**
      * Renders the description paragraph shared by the custom field renderers.
      *
+     * Deliberately returns unescaped markup: both call sites pass the result
+     * through `wp_kses_post()` as they echo it, which keeps the escaping visible
+     * at the point of output instead of escaping the description here and then
+     * again on the way out.
+     *
      * @param array<string, mixed> $data Form field definition.
      * @return string
      */
@@ -1211,7 +1434,7 @@ class Dodo_Payments_Checkout_Settings
             return '';
         }
 
-        return '<p class="description">' . wp_kses_post($data['description']) . '</p>';
+        return '<p class="description">' . $data['description'] . '</p>';
     }
 
     /**

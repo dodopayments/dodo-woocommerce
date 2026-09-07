@@ -329,9 +329,13 @@ function dodo_payments_init()
                     Dodo_Payments_Checkout_Settings::form_fields()
                 );
 
+                // Collapsible, like the sections above it. Before 0.6.0 nothing on
+                // this page folded; this section is long enough that leaving it
+                // as the one flat block on the screen would be the odd one out.
                 $this->form_fields['checkout_feature_flags_section'] = array(
                     'title' => __('Checkout Feature Flags', 'dodo-payments-for-woocommerce'),
                     'type' => 'title',
+                    'class' => Dodo_Payments_Checkout_Settings::SECTION_CLASS,
                     'description' => __('Control the behavior of the hosted Dodo Payments checkout page. Flags set to "Default" are not sent with the checkout session, so the Dodo Payments API applies its default.', 'dodo-payments-for-woocommerce'),
                 );
 
@@ -562,7 +566,7 @@ function dodo_payments_init()
                     'dodo-payments-admin-settings',
                     'dodoPaymentsSettings',
                     array(
-                        'sectionPrefix' => $this->get_field_key(Dodo_Payments_Checkout_Settings::PREFIX),
+                        'sectionClass' => Dodo_Payments_Checkout_Settings::SECTION_CLASS,
                         'cancelModeField' => $this->get_field_key(Dodo_Payments_Checkout_Settings::PREFIX . 'cancel_url_mode'),
                         'cancelCustomField' => $this->get_field_key(Dodo_Payments_Checkout_Settings::PREFIX . 'cancel_url_custom'),
                         'i18n' => array(
@@ -606,6 +610,10 @@ function dodo_payments_init()
             /**
              * The plugin version, used to bust cached admin assets.
              *
+             * Falls back to the file's modification time rather than a literal, so
+             * there is no second copy of the version to drift out of step with the
+             * plugin header.
+             *
              * @return string
              *
              * @since 0.6.0
@@ -618,7 +626,13 @@ function dodo_payments_init()
 
                 $data = get_plugin_data(__FILE__, false, false);
 
-                return empty($data['Version']) ? '0.6.0' : $data['Version'];
+                if (!empty($data['Version'])) {
+                    return $data['Version'];
+                }
+
+                $modified = filemtime(__FILE__);
+
+                return $modified ? (string) $modified : '';
             }
 
             public function process_payment($order_id)

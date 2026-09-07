@@ -9,6 +9,8 @@
 	'use strict';
 
 	var settings = window.dodoPaymentsSettings || {};
+	var i18n = settings.i18n || {};
+	var SECTION_CLASS = settings.sectionClass || 'dodo-section';
 	var STORAGE_KEY = 'dodoPaymentsOpenSections';
 
 	/**
@@ -43,20 +45,32 @@
 	 * WooCommerce renders a `title` form field as an `<h3>` followed by an optional
 	 * description and a fresh `<table class="form-table">`, all siblings. Each run
 	 * of those is gathered into one panel.
+	 *
+	 * Headings are matched on an explicit class set where the field is declared,
+	 * not on the option key prefix: which sections fold should be a decision, and
+	 * a prefix match would also have caught headings that merely share it.
+	 *
+	 * The run is bounded by `p.submit` as well as the next heading. Every one of
+	 * these elements is a flat sibling inside `#mainform`, and `p.submit` holds
+	 * the Save changes button and the settings nonce -- so were a marked heading
+	 * ever the last one on the page, an unbounded collection would pull the save
+	 * button into a panel that starts collapsed and hide it.
 	 */
 	function buildPanels() {
 		var open = readOpenSections();
 
-		$( 'h3.wc-settings-sub-title' ).each( function () {
+		$( 'h3.wc-settings-sub-title.' + SECTION_CLASS ).each( function ( index ) {
 			var $heading = $( this );
-			var id = $heading.attr( 'id' ) || '';
+			// WooCommerce always ids a title field from its key; the index keeps
+			// the open-state keys and aria-controls unique if one ever lacks it.
+			var id = $heading.attr( 'id' ) || 'dodo-section-' + index;
 
-			if ( id.indexOf( settings.sectionPrefix ) !== 0 ) {
-				return;
-			}
-
-			var $content = $heading.nextUntil( 'h3.wc-settings-sub-title' );
-			var fieldCount = $content.find( '.form-table > tbody > tr' ).length;
+			var $content = $heading.nextUntil( 'h3.wc-settings-sub-title, p.submit' );
+			// The tables are members of $content, not descendants of it, so this
+			// has to filter before it descends -- `$content.find( '.form-table
+			// > tbody > tr' )` looks for a table nested inside the table and
+			// always found nothing.
+			var fieldCount = $content.filter( 'table.form-table' ).find( 'tbody > tr' ).length;
 			var isOpen = !! open[ id ];
 
 			var $panel = $( '<div/>', { 'class': 'dodo-panel' + ( isOpen ? ' is-open' : '' ) } );
@@ -73,12 +87,16 @@
 			$toggle.append( $( '<span/>', { text: $heading.text() } ) );
 
 			if ( fieldCount ) {
-				$toggle.append(
-					$( '<span/>', {
-						'class': 'dodo-panel__count',
-						text: fieldCount === 1 ? settings.i18n.oneField : settings.i18n.manyFields.replace( '%d', fieldCount )
-					} )
-				);
+				var countLabel = fieldCount === 1 ? i18n.oneField : i18n.manyFields;
+
+				if ( countLabel ) {
+					$toggle.append(
+						$( '<span/>', {
+							'class': 'dodo-panel__count',
+							text: String( countLabel ).replace( '%d', fieldCount )
+						} )
+					);
+				}
 			}
 
 			$heading.before( $panel );
