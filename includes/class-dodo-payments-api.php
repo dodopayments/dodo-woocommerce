@@ -5,6 +5,11 @@ class Dodo_Payments_API
     private const MAX_PRODUCT_NAME_LENGTH = 100;
     private const MAX_PRODUCT_DESCRIPTION_LENGTH = 999;
 
+    /**
+     * Maximum length of `customer_business_name` per the Checkout Sessions schema.
+     */
+    private const MAX_BUSINESS_NAME_LENGTH = 250;
+
     private bool $testmode;
     private string $api_key;
     /**
@@ -24,11 +29,28 @@ class Dodo_Payments_API
      * @var array<string, bool>
      */
     private array $feature_flags;
+    /**
+     * Checkout Session request fragment assembled from the settings page.
+     * Contains only options the merchant configured; everything left at its
+     * default is absent, so the Checkout Sessions API keeps control of defaults.
+     * @var array<string, mixed>
+     */
+    private array $checkout_options;
+    /**
+     * Whether the order's billing phone number is sent with the checkout session.
+     * @var bool
+     */
+    private bool $send_customer_phone;
+    /**
+     * Whether the order's billing company is sent as `customer_business_name`.
+     * @var bool
+     */
+    private bool $send_customer_business_name;
 
     /**
      * Initializes the Dodo_Payments_API instance with configuration options.
      *
-     * @param array{testmode: bool, api_key: string, global_tax_category: string, global_tax_inclusive: bool, feature_flags?: array<string, bool>} $options Configuration options for API access and behavior.
+     * @param array{testmode: bool, api_key: string, global_tax_category: string, global_tax_inclusive: bool, feature_flags?: array<string, bool>, checkout_options?: array<string, mixed>, send_customer_phone?: bool, send_customer_business_name?: bool} $options Configuration options for API access and behavior.
      */
     public function __construct($options)
     {
@@ -37,6 +59,9 @@ class Dodo_Payments_API
         $this->global_tax_category = $options['global_tax_category'];
         $this->global_tax_inclusive = $options['global_tax_inclusive'];
         $this->feature_flags = isset($options['feature_flags']) ? $options['feature_flags'] : array();
+        $this->checkout_options = isset($options['checkout_options']) ? $options['checkout_options'] : array();
+        $this->send_customer_phone = !empty($options['send_customer_phone']);
+        $this->send_customer_business_name = !empty($options['send_customer_business_name']);
     }
 
     /**
@@ -195,6 +220,7 @@ class Dodo_Payments_API
      * @param string $return_url URL to redirect the customer after checkout completion.
      * @param array<string, string> $metadata Metadata to associate with the checkout (used by webhooks to resolve the WC order/subscription).
      * @param array{on_demand?: array{mandate_only: bool}, trial_period_days?: int}|null $subscription_data Optional subscription configuration (e.g. mandate-only authorization).
+     * @param string|null $cancel_url URL to redirect the customer to if they abandon the hosted checkout.
      * @throws \Exception If the order has no billing country or the API request fails.
      * @return array{session_id: string, checkout_url: string|null} The created checkout session.
      */
@@ -204,7 +230,8 @@ class Dodo_Payments_API
         $dodo_discount_code,
         $return_url,
         $metadata = array(),
-        $subscription_data = null
+        $subscription_data = null,
+        $cancel_url = null
     ) {
         // billing_address.country is the only required field inside billing_address
         // per the Checkout Sessions schema. Fail fast with a clear message rather
@@ -230,13 +257,40 @@ class Dodo_Payments_API
             'return_url' => $return_url,
         );
 
+        if ($this->send_customer_phone) {
+            $phone = self::trim_to_null($order->get_billing_phone());
+            if ($phone !== null) {
+                $request['customer']['phone_number'] = $phone;
+            }
+        }
+
+        if ($cancel_url !== null && $cancel_url !== '') {
+            $request['cancel_url'] = $cancel_url;
+        }
+
         $tax_id = self::get_order_tax_id($order);
         if ($tax_id !== null) {
             $request['tax_id'] = $tax_id;
         }
 
+        // `customer_business_name` is only valid alongside a `tax_id` -- the API
+        // rejects a business name on its own. WooCommerce core collects Company
+        // as a standard optional billing field but has no tax ID field at all,
+        // so sending the company unconditionally would fail exactly those orders
+        // where a customer filled Company in and no VAT extension is installed.
+        // Gate on the tax ID rather than hand the API a request it must refuse.
+        if ($this->send_customer_business_name && $tax_id !== null) {
+            $business_name = self::trim_to_null($order->get_billing_company());
+            if ($business_name !== null) {
+                $request['customer_business_name'] = mb_substr($business_name, 0, self::MAX_BUSINESS_NAME_LENGTH);
+            }
+        }
+
+        // `discount_code` is deprecated in favour of the stackable `discount_codes`
+        // array. Only one code is ever produced here -- WooCommerce coupons are
+        // synced one-to-one -- so this is a field migration, not a behaviour change.
         if ($dodo_discount_code) {
-            $request['discount_code'] = $dodo_discount_code;
+            $request['discount_codes'] = array($dodo_discount_code);
         }
 
         if (!empty($metadata)) {
@@ -245,6 +299,34 @@ class Dodo_Payments_API
 
         if ($subscription_data !== null) {
             $request['subscription_data'] = $subscription_data;
+        }
+
+        // Merchant-configured options go in underneath: anything derived from the
+        // order itself takes precedence over a store-wide setting.
+        if (!empty($this->checkout_options)) {
+            $request = array_merge($this->checkout_options, $request);
+        }
+
+        // `confirm` tells the API to settle every detail up front, so anything
+        // the order is missing becomes a 422 rather than a prompt on the hosted
+        // page. Check first and fail with a message naming the missing fields:
+        // the API's own error does not identify them, which leaves a merchant
+        // staring at an opaque failure on every order.
+        if (!empty($request['confirm'])) {
+            $missing = Dodo_Payments_Checkout_Settings::missing_confirm_fields(
+                $order,
+                !empty($request['minimal_address'])
+            );
+
+            if (!empty($missing)) {
+                throw new Exception(
+                    esc_html(sprintf(
+                        /* translators: %s: comma-separated list of missing billing fields */
+                        __('Failed to create checkout session: "Finalise Details At Checkout" is enabled but the order is missing %s. Either collect these fields at your WooCommerce checkout or disable that setting.', 'dodo-payments-for-woocommerce'),
+                        implode(', ', $missing)
+                    ))
+                );
+            }
         }
 
         /**
@@ -258,6 +340,22 @@ class Dodo_Payments_API
         $feature_flags = apply_filters('dodo_payments_checkout_session_feature_flags', $this->feature_flags, $order);
         if (is_array($feature_flags) && !empty($feature_flags)) {
             $request['feature_flags'] = $feature_flags;
+        }
+
+        /**
+         * Filters the complete Checkout Session request body before it is sent.
+         *
+         * Provides an escape hatch for the Checkout Sessions fields the settings
+         * page does not expose, and for per-order overrides of the ones it does.
+         *
+         * @param array<string, mixed> $request The request body.
+         * @param WC_Order $order The WooCommerce order the checkout session is for.
+         *
+         * @since 0.6.0
+         */
+        $filtered = apply_filters('dodo_payments_checkout_session_request', $request, $order);
+        if (is_array($filtered) && !empty($filtered)) {
+            $request = $filtered;
         }
 
         $res = $this->post('/checkouts', $request);
