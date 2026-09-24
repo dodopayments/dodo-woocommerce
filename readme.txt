@@ -3,7 +3,7 @@ Contributors: ayushdodopayments
 Tags: payments, woocommerce, dodo payments, merchant of record, subscriptions
 Requires at least: 6.1
 Tested up to: 7.0
-Stable tag: 0.5.0
+Stable tag: 0.6.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -135,6 +135,10 @@ Dodo Payments appears as the merchant. Your product or brand reference is includ
 Contact the Dodo Payments support team at [support@dodopayments.com](mailto:support@dodopayments.com). You can also access support through the "Get Support" icon on the [Dodo Payments Dashboard](https://app.dodopayments.com). For more information, visit [dodopayments.com](https://dodopayments.com).
 
 == Changelog ==
+
+= 0.6.0 =
+* Feature: configure a custom return URL from the plugin settings, used instead of the default WooCommerce order-received page after a successful hosted checkout.
+* Dev: new `dodo_payments_checkout_return_url` filter to override the return URL per order.
 
 = 0.5.0 =
 * Feature: control the hosted checkout's feature flags (currency selection, discount codes, tax ID, phone number collection, customer-editable fields, and more) from the plugin settings page. Flags left at "Default" are omitted from the checkout session so Dodo Payments keeps control of their defaults.
