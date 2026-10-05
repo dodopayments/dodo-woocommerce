@@ -852,8 +852,12 @@ class Dodo_Payments_Checkout_Settings
      * rather than the token's own name so that a value already containing the
      * sentinel text cannot be rewritten into a different placeholder.
      *
+     * Anything that does not survive as an http(s) URL is rejected rather than
+     * saved, so WooCommerce reports the error and keeps the previous value.
+     *
      * @param mixed $value Raw posted value.
      * @return string
+     * @throws Exception If a non-empty value is not a valid http(s) URL.
      */
     public static function sanitize_url($value)
     {
@@ -879,6 +883,15 @@ class Dodo_Payments_Checkout_Settings
 
         $value = strtr($value, $sentinels);
         $value = esc_url_raw($value);
+
+        // Checked while the sentinels are still in place: braces would fail
+        // FILTER_VALIDATE_URL even though the placeholders are legitimate.
+        $is_valid = false !== filter_var($value, FILTER_VALIDATE_URL)
+            && in_array(wp_parse_url($value, PHP_URL_SCHEME), array('http', 'https'), true);
+
+        if (!$is_valid) {
+            throw new Exception(__('Redirect URLs must be valid http:// or https:// URLs.', 'dodo-payments-for-woocommerce'));
+        }
 
         return strtr($value, array_flip($sentinels));
     }

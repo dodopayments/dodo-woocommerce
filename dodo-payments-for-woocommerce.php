@@ -79,7 +79,6 @@ function dodo_payments_init()
             private bool $testmode;
             private string $api_key;
             private string $webhook_key;
-            private string $return_url;
 
             protected Dodo_Payments_API $dodo_payments_api;
 
@@ -137,7 +136,6 @@ function dodo_payments_init()
                 $this->title = $this->get_option('title');
                 $this->description = $this->get_option('description');
                 $this->instructions = $this->get_option('instructions');
-                $this->return_url = $this->get_option('return_url');
 
                 $this->testmode = 'yes' === $this->get_option('testmode');
                 $this->api_key = $this->testmode ? $this->get_option('test_api_key') : $this->get_option('live_api_key');
@@ -160,6 +158,8 @@ function dodo_payments_init()
                 $this->init_dodo_payments_api();
 
                 add_action('woocommerce_update_options_payment_gateways_' . $this->id, array($this, 'process_admin_options'));
+
+                add_action('admin_notices', array($this, 'display_errors'));
 
                 add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_assets'));
 
@@ -646,6 +646,37 @@ function dodo_payments_init()
                 return empty($data['Version']) ? '0.6.0' : $data['Version'];
             }
 
+            /**
+             * Resolves the URL the customer is sent to after paying.
+             *
+             * The configured return URL falls back to exactly what the gateway
+             * sent before the setting existed, so an unconfigured store is
+             * unaffected.
+             *
+             * @param WC_Order $order
+             * @return string
+             *
+             * @since 0.6.0
+             */
+            private function get_checkout_return_url($order)
+            {
+                $return_url = Dodo_Payments_Checkout_Settings::resolve_return_url(
+                    $this->get_option(Dodo_Payments_Checkout_Settings::PREFIX . 'return_url'),
+                    $this->get_return_url($order),
+                    $order
+                );
+
+                /**
+                 * Filters the URL the customer is redirected to after a successful checkout.
+                 *
+                 * @param string $return_url The resolved return URL.
+                 * @param WC_Order $order The WooCommerce order the checkout is for.
+                 *
+                 * @since 0.6.0
+                 */
+                return apply_filters('dodo_payments_checkout_return_url', $return_url, $order);
+            }
+
             public function process_payment($order_id)
             {
                 $order = wc_get_order($order_id);
@@ -735,15 +766,6 @@ function dodo_payments_init()
                         }
                     }
 
-                    // The configured return URL falls back to exactly what the
-                    // gateway sent before the setting existed, so an unconfigured
-                    // store is unaffected.
-                    $return_url = Dodo_Payments_Checkout_Settings::resolve_return_url(
-                        $this->get_option(Dodo_Payments_Checkout_Settings::PREFIX . 'return_url'),
-                        $this->get_return_url($order),
-                        $order
-                    );
-
                     $cancel_url = Dodo_Payments_Checkout_Settings::resolve_cancel_url(
                         $this->get_option(Dodo_Payments_Checkout_Settings::PREFIX . 'cancel_url_mode'),
                         $this->get_option(Dodo_Payments_Checkout_Settings::PREFIX . 'cancel_url_custom'),
@@ -754,7 +776,7 @@ function dodo_payments_init()
                         $order,
                         $synced_products,
                         $dodo_discount_code,
-                        $return_url,
+                        $this->get_checkout_return_url($order),
                         $metadata,
                         null,
                         $cancel_url

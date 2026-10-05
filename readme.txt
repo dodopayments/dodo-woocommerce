@@ -149,6 +149,7 @@ Contact the Dodo Payments support team at [support@dodopayments.com](mailto:supp
 * Enhancement: a "Reset to defaults" button on the settings page restores every checkout option and feature flag, keeping the general settings, API keys and webhook signing keys.
 * Migration: checkout sessions now use the stackable `discount_codes` field in place of the deprecated `discount_code`.
 * Dev: new `dodo_payments_checkout_session_request` filter over the entire checkout session request body, for the API fields the settings page does not expose.
+* Dev: new `dodo_payments_checkout_return_url` filter to override the return URL per order.
 
 = 0.5.0 =
 * Feature: control the hosted checkout's feature flags (currency selection, discount codes, tax ID, phone number collection, customer-editable fields, and more) from the plugin settings page. Flags left at "Default" are omitted from the checkout session so Dodo Payments keeps control of their defaults.
