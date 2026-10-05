@@ -57,6 +57,13 @@ add_action('before_woocommerce_init', function () {
 
 add_action('plugins_loaded', 'dodo_payments_init');
 
+// WooCommerce only saves a settings section when the posted form carries its own
+// `save` button, so a submission from the reset button has to be let through.
+add_filter('woocommerce_save_settings_checkout_dodo_payments', function ($save) {
+    // phpcs:ignore WordPress.Security.NonceVerification.Missing -- Presence check only; WC_Admin_Settings::save() verifies the nonce.
+    return $save || !empty($_POST[Dodo_Payments_Checkout_Settings::RESET_FIELD]);
+});
+
 /**
  * Initializes the Dodo Payments payment gateway for WooCommerce.
  *
@@ -482,22 +489,36 @@ function dodo_payments_init()
             }
 
             /**
-             * Renders the colour grid for one hosted-checkout theme mode.
+             * Saves the settings form, or resets the checkout settings when the
+             * reset button submitted it.
              *
-             * Dispatched by WC_Settings_API for form fields of type `dodo_colors`.
+             * A reset clears the Checkout Session options and feature flags only;
+             * the general settings, API keys and tax options are kept. Unsaved
+             * edits elsewhere on the page are discarded rather than half-applied.
+             * WooCommerce has already verified the settings nonce and the
+             * manage_woocommerce capability before this runs.
              *
-             * @param string $key  Form field key.
-             * @param array<string, mixed> $data Form field definition.
-             * @return string
+             * @return bool Whether anything was saved.
              *
              * @since 0.6.0
              */
-            public function generate_dodo_colors_html($key, $data)
+            public function process_admin_options()
             {
-                return Dodo_Payments_Checkout_Settings::render_colors(
-                    $this->get_field_key($key),
-                    wp_parse_args($data, array('title' => '', 'description' => '')),
-                    $this->get_option($key)
+                // phpcs:ignore WordPress.Security.NonceVerification.Missing -- Verified by WC_Admin_Settings::save().
+                if (empty($_POST[Dodo_Payments_Checkout_Settings::RESET_FIELD])) {
+                    return parent::process_admin_options();
+                }
+
+                $this->init_settings();
+                $this->settings = Dodo_Payments_Checkout_Settings::reset_settings(
+                    $this->settings,
+                    array(Dodo_Payments_Checkout_Settings::PREFIX, 'feature_flag_')
+                );
+
+                return update_option(
+                    $this->get_option_key(),
+                    apply_filters('woocommerce_settings_api_sanitized_fields_' . $this->id, $this->settings),
+                    'yes'
                 );
             }
 
@@ -522,7 +543,7 @@ function dodo_payments_init()
             }
 
             /**
-             * Loads the colour picker, the repeater and the collapsible sections.
+             * Loads the repeater, the reset button and the collapsible sections.
              *
              * Restricted to this gateway's own settings screen: the settings page
              * is the only place any of this markup exists, and WooCommerce admin
@@ -540,11 +561,10 @@ function dodo_payments_init()
 
                 $version = self::plugin_version();
 
-                wp_enqueue_style('wp-color-picker');
                 wp_enqueue_style(
                     'dodo-payments-admin-settings',
                     plugins_url('/assets/admin-settings.css', __FILE__),
-                    array('wp-color-picker'),
+                    array(),
                     $version
                 );
 
@@ -555,7 +575,7 @@ function dodo_payments_init()
                 wp_enqueue_script(
                     'dodo-payments-admin-settings',
                     plugins_url('/assets/admin-settings.js', __FILE__),
-                    array('jquery', 'wp-color-picker'),
+                    array('jquery'),
                     $version,
                     true
                 );
@@ -567,7 +587,10 @@ function dodo_payments_init()
                         'sectionPrefix' => $this->get_field_key(Dodo_Payments_Checkout_Settings::PREFIX),
                         'cancelModeField' => $this->get_field_key(Dodo_Payments_Checkout_Settings::PREFIX . 'cancel_url_mode'),
                         'cancelCustomField' => $this->get_field_key(Dodo_Payments_Checkout_Settings::PREFIX . 'cancel_url_custom'),
+                        'resetField' => Dodo_Payments_Checkout_Settings::RESET_FIELD,
                         'i18n' => array(
+                            'reset' => __('Reset to defaults', 'dodo-payments-for-woocommerce'),
+                            'resetConfirm' => __('Reset every checkout option and feature flag to its default? Your general settings, API keys and webhook signing keys are kept. Unsaved changes on this page will be lost.', 'dodo-payments-for-woocommerce'),
                             'oneField' => __('1 setting', 'dodo-payments-for-woocommerce'),
                             /* translators: %d: number of settings in the section */
                             'manyFields' => __('%d settings', 'dodo-payments-for-woocommerce'),

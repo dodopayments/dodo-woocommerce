@@ -35,14 +35,14 @@ class Dodo_Payments_Checkout_Settings
     const PREFIX = 'checkout_';
 
     /**
+     * Name of the submit button that resets the checkout settings to their defaults.
+     */
+    const RESET_FIELD = 'dodo_payments_reset_checkout';
+
+    /**
      * Maximum number of `custom_fields` entries the API accepts per session.
      */
     const MAX_CUSTOM_FIELDS = 5;
-
-    /**
-     * Maximum length of `theme_config.pay_button_text` per the API schema.
-     */
-    const MAX_PAY_BUTTON_TEXT = 100;
 
     /**
      * Billing fields Dodo Payments needs before a session can be finalised.
@@ -108,37 +108,6 @@ class Dodo_Payments_Checkout_Settings
     private static function url_placeholders()
     {
         return array('{order_id}', '{order_key}', '{order_number}');
-    }
-
-    /**
-     * Colour tokens accepted by `theme_config.light` / `theme_config.dark`.
-     *
-     * Keyed by API field name; the value is the admin-facing label. Rendered as a
-     * single grid of colour pickers per mode rather than 16 separate form rows,
-     * which would make the settings page unusable.
-     *
-     * @return array<string, string>
-     */
-    public static function color_tokens()
-    {
-        return array(
-            'bg_primary' => __('Background', 'dodo-payments-for-woocommerce'),
-            'bg_secondary' => __('Background (secondary)', 'dodo-payments-for-woocommerce'),
-            'text_primary' => __('Text', 'dodo-payments-for-woocommerce'),
-            'text_secondary' => __('Text (secondary)', 'dodo-payments-for-woocommerce'),
-            'text_placeholder' => __('Placeholder text', 'dodo-payments-for-woocommerce'),
-            'text_error' => __('Error text', 'dodo-payments-for-woocommerce'),
-            'text_success' => __('Success text', 'dodo-payments-for-woocommerce'),
-            'button_primary' => __('Primary button', 'dodo-payments-for-woocommerce'),
-            'button_primary_hover' => __('Primary button (hover)', 'dodo-payments-for-woocommerce'),
-            'button_text_primary' => __('Primary button text', 'dodo-payments-for-woocommerce'),
-            'button_secondary' => __('Secondary button', 'dodo-payments-for-woocommerce'),
-            'button_secondary_hover' => __('Secondary button (hover)', 'dodo-payments-for-woocommerce'),
-            'button_text_secondary' => __('Secondary button text', 'dodo-payments-for-woocommerce'),
-            'border_primary' => __('Border', 'dodo-payments-for-woocommerce'),
-            'border_secondary' => __('Border (secondary)', 'dodo-payments-for-woocommerce'),
-            'input_focus_border' => __('Input focus border', 'dodo-payments-for-woocommerce'),
-        );
     }
 
     /**
@@ -298,7 +267,7 @@ class Dodo_Payments_Checkout_Settings
      *   - `path` -- dot-delimited position in the request body. Absent for options
      *     that change plugin behaviour rather than mapping to a request field.
      *   - `cast` -- how the stored value converts for the request: `bool`, `int`,
-     *     `list`, `map` or (by default) `string`.
+     *     `list` or (by default) `string`.
      *
      * Section headings are plain `title` fields with neither `path` nor `cast`.
      *
@@ -444,133 +413,6 @@ class Dodo_Payments_Checkout_Settings
         );
 
         // -----------------------------------------------------------------
-        // Branding
-        // -----------------------------------------------------------------
-        $schema['section_branding'] = array(
-            'form' => array(
-                'title' => __('Branding', 'dodo-payments-for-woocommerce'),
-                'type' => 'title',
-                'description' => __('Match the hosted checkout to your storefront. Every field here is optional; empty fields fall back to the Dodo Payments look.', 'dodo-payments-for-woocommerce'),
-            ),
-        );
-
-        $schema['pay_button_text'] = array(
-            'path' => 'customization.theme_config.pay_button_text',
-            'form' => array(
-                'title' => __('Pay Button Text', 'dodo-payments-for-woocommerce'),
-                'type' => 'text',
-                'default' => '',
-                'sanitize_callback' => array(__CLASS__, 'sanitize_pay_button_text'),
-                'desc_tip' => false,
-                'custom_attributes' => array('maxlength' => self::MAX_PAY_BUTTON_TEXT),
-                'description' => sprintf(
-                    /* translators: %d: maximum number of characters */
-                    __('Label on the checkout\'s pay button. Up to %d characters.', 'dodo-payments-for-woocommerce'),
-                    self::MAX_PAY_BUTTON_TEXT
-                ),
-            ),
-        );
-
-        $schema['radius'] = array(
-            'path' => 'customization.theme_config.radius',
-            'form' => array(
-                'title' => __('Corner Radius', 'dodo-payments-for-woocommerce'),
-                'type' => 'text',
-                'default' => '',
-                'sanitize_callback' => array(__CLASS__, 'sanitize_text'),
-                'desc_tip' => false,
-                'placeholder' => '8px',
-                'description' => __('Corner rounding applied to buttons and inputs, as a CSS length.', 'dodo-payments-for-woocommerce'),
-            ),
-        );
-
-        $schema['font_size'] = array(
-            'path' => 'customization.theme_config.font_size',
-            'form' => array(
-                'title' => __('Font Size', 'dodo-payments-for-woocommerce'),
-                'type' => 'select',
-                'default' => '',
-                'desc_tip' => false,
-                'options' => array(
-                    '' => __('Default', 'dodo-payments-for-woocommerce'),
-                    'xs' => __('Extra small', 'dodo-payments-for-woocommerce'),
-                    'sm' => __('Small', 'dodo-payments-for-woocommerce'),
-                    'md' => __('Medium', 'dodo-payments-for-woocommerce'),
-                    'lg' => __('Large', 'dodo-payments-for-woocommerce'),
-                    'xl' => __('Extra large', 'dodo-payments-for-woocommerce'),
-                    '2xl' => __('Extra extra large', 'dodo-payments-for-woocommerce'),
-                ),
-            ),
-        );
-
-        $schema['font_weight'] = array(
-            'path' => 'customization.theme_config.font_weight',
-            'form' => array(
-                'title' => __('Font Weight', 'dodo-payments-for-woocommerce'),
-                'type' => 'select',
-                'default' => '',
-                'desc_tip' => false,
-                'options' => array(
-                    '' => __('Default', 'dodo-payments-for-woocommerce'),
-                    'normal' => __('Normal', 'dodo-payments-for-woocommerce'),
-                    'medium' => __('Medium', 'dodo-payments-for-woocommerce'),
-                    'bold' => __('Bold', 'dodo-payments-for-woocommerce'),
-                    'extraBold' => __('Extra bold', 'dodo-payments-for-woocommerce'),
-                ),
-            ),
-        );
-
-        $schema['font_primary_url'] = array(
-            'path' => 'customization.theme_config.font_primary_url',
-            'form' => array(
-                'title' => __('Primary Font URL', 'dodo-payments-for-woocommerce'),
-                'type' => 'url',
-                'default' => '',
-                'sanitize_callback' => array(__CLASS__, 'sanitize_url'),
-                'desc_tip' => false,
-                'description' => __('Web font used for headings and body text on the hosted checkout.', 'dodo-payments-for-woocommerce'),
-            ),
-        );
-
-        $schema['font_secondary_url'] = array(
-            'path' => 'customization.theme_config.font_secondary_url',
-            'form' => array(
-                'title' => __('Secondary Font URL', 'dodo-payments-for-woocommerce'),
-                'type' => 'url',
-                'default' => '',
-                'sanitize_callback' => array(__CLASS__, 'sanitize_url'),
-                'desc_tip' => false,
-                'description' => __('Web font used for supporting text on the hosted checkout.', 'dodo-payments-for-woocommerce'),
-            ),
-        );
-
-        $schema['theme_colors_light'] = array(
-            'path' => 'customization.theme_config.light',
-            'cast' => 'map',
-            'form' => array(
-                'title' => __('Light Mode Colours', 'dodo-payments-for-woocommerce'),
-                'type' => 'dodo_colors',
-                'default' => array(),
-                'sanitize_callback' => array(__CLASS__, 'sanitize_colors'),
-                'desc_tip' => false,
-                'description' => __('Applied when the hosted checkout renders in light mode. Colours left empty keep the Dodo Payments default.', 'dodo-payments-for-woocommerce'),
-            ),
-        );
-
-        $schema['theme_colors_dark'] = array(
-            'path' => 'customization.theme_config.dark',
-            'cast' => 'map',
-            'form' => array(
-                'title' => __('Dark Mode Colours', 'dodo-payments-for-woocommerce'),
-                'type' => 'dodo_colors',
-                'default' => array(),
-                'sanitize_callback' => array(__CLASS__, 'sanitize_colors'),
-                'desc_tip' => false,
-                'description' => __('Applied when the hosted checkout renders in dark mode. Colours left empty keep the Dodo Payments default.', 'dodo-payments-for-woocommerce'),
-            ),
-        );
-
-        // -----------------------------------------------------------------
         // Payment methods and currency
         // -----------------------------------------------------------------
         $schema['section_payments'] = array(
@@ -659,22 +501,6 @@ class Dodo_Payments_Checkout_Settings
                 'title' => __('Checkout Behaviour', 'dodo-payments-for-woocommerce'),
                 'type' => 'title',
                 'description' => __('How the hosted checkout session itself behaves.', 'dodo-payments-for-woocommerce'),
-            ),
-        );
-
-        $schema['short_link'] = array(
-            'path' => 'short_link',
-            'cast' => 'bool',
-            'form' => array(
-                'title' => __('Shortened Checkout Link', 'dodo-payments-for-woocommerce'),
-                'type' => 'select',
-                'default' => '',
-                'desc_tip' => false,
-                'options' => $tristate,
-                'description' => self::with_api_default(
-                    __('Send customers to a shortened checkout URL.', 'dodo-payments-for-woocommerce'),
-                    false
-                ),
             ),
         );
 
@@ -790,6 +616,35 @@ class Dodo_Payments_Checkout_Settings
     }
 
     /**
+     * Drops every saved setting whose key starts with one of the given prefixes.
+     *
+     * Removing the stored value, rather than writing each field's default into
+     * it, lets WooCommerce fall back to the form field's declared default on the
+     * next read. It also clears values left behind by options that have since
+     * been removed from the schema.
+     *
+     * @param array<string, mixed> $settings Saved gateway settings.
+     * @param string[]             $prefixes Key prefixes to reset.
+     * @return array<string, mixed> Settings without the reset keys.
+     */
+    public static function reset_settings($settings, $prefixes)
+    {
+        return array_filter(
+            $settings,
+            function ($key) use ($prefixes) {
+                foreach ($prefixes as $prefix) {
+                    if (0 === strpos((string) $key, $prefix)) {
+                        return false;
+                    }
+                }
+
+                return true;
+            },
+            ARRAY_FILTER_USE_KEY
+        );
+    }
+
+    /**
      * Builds the Checkout Session request fragment from the saved settings.
      *
      * Walks the schema, reads each saved value through `$read`, prunes anything
@@ -830,7 +685,7 @@ class Dodo_Payments_Checkout_Settings
      * Converts a saved setting to its request representation.
      *
      * @param mixed  $value Saved value.
-     * @param string $cast  One of `bool`, `int`, `list`, `map`, `string`.
+     * @param string $cast  One of `bool`, `int`, `list`, `string`.
      * @return mixed|null Null when the value should be omitted from the request.
      */
     private static function cast_for_request($value, $cast)
@@ -856,18 +711,6 @@ class Dodo_Payments_Checkout_Settings
                     return null;
                 }
                 $value = array_values(array_filter($value));
-                return empty($value) ? null : $value;
-
-            case 'map':
-                if (!is_array($value)) {
-                    return null;
-                }
-                $value = array_filter(
-                    $value,
-                    function ($entry) {
-                        return is_string($entry) && '' !== trim($entry);
-                    }
-                );
                 return empty($value) ? null : $value;
 
             default:
@@ -997,23 +840,6 @@ class Dodo_Payments_Checkout_Settings
     }
 
     /**
-     * Sanitizes the pay button label, enforcing the API's length limit.
-     *
-     * @param mixed $value Raw posted value.
-     * @return string
-     */
-    public static function sanitize_pay_button_text($value)
-    {
-        $value = self::sanitize_text($value);
-
-        if (function_exists('mb_substr')) {
-            return mb_substr($value, 0, self::MAX_PAY_BUTTON_TEXT);
-        }
-
-        return substr($value, 0, self::MAX_PAY_BUTTON_TEXT);
-    }
-
-    /**
      * Sanitizes a URL option, preserving the order placeholders.
      *
      * `esc_url_raw()` strips any character outside the set `esc_url()` permits,
@@ -1079,49 +905,6 @@ class Dodo_Payments_Checkout_Settings
         }
 
         return (string) max(0, (int) $value);
-    }
-
-    /**
-     * Sanitizes the colour grid posted for one theme mode.
-     *
-     * Values are passed to the API verbatim, so the accepted formats are
-     * constrained here rather than trusted: hex (3, 4, 6 or 8 digits), the
-     * functional `rgb()`/`rgba()`/`hsl()`/`hsla()` notations, and CSS named
-     * colours. Anything else is discarded.
-     *
-     * @param mixed $value Raw posted value.
-     * @return array<string, string>
-     */
-    public static function sanitize_colors($value)
-    {
-        if (!is_array($value)) {
-            return array();
-        }
-
-        $tokens = self::color_tokens();
-        $clean = array();
-
-        foreach ($tokens as $token => $unused_label) {
-            if (!isset($value[$token]) || !is_string($value[$token])) {
-                continue;
-            }
-
-            $color = trim(sanitize_text_field(wp_unslash($value[$token])));
-
-            if ('' === $color) {
-                continue;
-            }
-
-            $is_hex = (bool) preg_match('/^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i', $color);
-            $is_functional = (bool) preg_match('/^(?:rgb|hsl)a?\(\s*[0-9a-z.,%\s\/-]+\s*\)$/i', $color);
-            $is_named = (bool) preg_match('/^[a-z]{3,32}$/i', $color);
-
-            if ($is_hex || $is_functional || $is_named) {
-                $clean[$token] = $color;
-            }
-        }
-
-        return $clean;
     }
 
     /**
@@ -1212,56 +995,6 @@ class Dodo_Payments_Checkout_Settings
         }
 
         return '<p class="description">' . wp_kses_post($data['description']) . '</p>';
-    }
-
-    /**
-     * Renders one theme mode's colour grid as a single settings row.
-     *
-     * Sixteen colours per mode across two modes would be thirty-two separate rows
-     * on an already long settings page, so each mode is rendered as one row
-     * holding a grid of pickers. Inputs post as `field_key[token]`, which
-     * WooCommerce hands to the sanitizer as an array.
-     *
-     * @param string               $field_key Fully qualified input name.
-     * @param array<string, mixed> $data      Form field definition.
-     * @param array<string, mixed> $value     Saved colours, keyed by token.
-     * @return string
-     */
-    public static function render_colors($field_key, $data, $value)
-    {
-        $value = is_array($value) ? $value : array();
-
-        ob_start();
-        ?>
-        <tr valign="top">
-            <th scope="row" class="titledesc">
-                <?php echo esc_html($data['title']); ?>
-            </th>
-            <td class="forminp">
-                <fieldset class="dodo-colors">
-                    <legend class="screen-reader-text"><span><?php echo esc_html($data['title']); ?></span></legend>
-                    <div class="dodo-colors__grid">
-                        <?php foreach (self::color_tokens() as $token => $label) : ?>
-                            <?php $input_id = $field_key . '_' . $token; ?>
-                            <div class="dodo-colors__item">
-                                <label for="<?php echo esc_attr($input_id); ?>"><?php echo esc_html($label); ?></label>
-                                <input
-                                    type="text"
-                                    class="dodo-color-input"
-                                    id="<?php echo esc_attr($input_id); ?>"
-                                    name="<?php echo esc_attr($field_key); ?>[<?php echo esc_attr($token); ?>]"
-                                    value="<?php echo esc_attr(isset($value[$token]) ? $value[$token] : ''); ?>"
-                                    data-default-color=""
-                                />
-                            </div>
-                        <?php endforeach; ?>
-                    </div>
-                    <?php echo wp_kses_post(self::description_html($data)); ?>
-                </fieldset>
-            </td>
-        </tr>
-        <?php
-        return ob_get_clean();
     }
 
     /**

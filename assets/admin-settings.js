@@ -2,8 +2,8 @@
  * Dodo Payments -- gateway settings screen behaviour.
  *
  * Three responsibilities: fold the long settings form into collapsible sections,
- * attach the WordPress colour picker to the theme colour grids, and drive the
- * repeatable "extra checkout questions" table.
+ * drive the repeatable "extra checkout questions" table, and add the button that
+ * resets the checkout settings to their defaults.
  */
 ( function ( $ ) {
 	'use strict';
@@ -102,21 +102,6 @@
 				writeOpenSections( state );
 			} );
 		} );
-	}
-
-	/**
-	 * Attaches the WordPress colour picker to every colour input.
-	 *
-	 * @param {jQuery} $scope Element to search within.
-	 */
-	function initColorPickers( $scope ) {
-		var $inputs = $scope.find( '.dodo-color-input' );
-
-		if ( ! $inputs.length || ! $.fn.wpColorPicker ) {
-			return;
-		}
-
-		$inputs.wpColorPicker();
 	}
 
 	/**
@@ -233,10 +218,48 @@
 		sync();
 	}
 
+	/**
+	 * Adds the reset button beside WooCommerce's own save button.
+	 *
+	 * It submits the settings form like the save button does, so WooCommerce's
+	 * nonce and capability checks still apply; the server sees the button's name
+	 * and resets instead of saving.
+	 */
+	function initResetButton() {
+		var $submit = $( 'p.submit' ).first();
+
+		if ( ! $submit.length || ! settings.resetField ) {
+			return;
+		}
+
+		var $button = $( '<button/>', {
+			type: 'submit',
+			'class': 'button dodo-reset-defaults',
+			name: settings.resetField,
+			value: '1',
+			formnovalidate: 'formnovalidate',
+			text: settings.i18n.reset
+		} );
+
+		$button.on( 'click', function ( event ) {
+			if ( ! window.confirm( settings.i18n.resetConfirm ) ) {
+				event.preventDefault();
+				return;
+			}
+
+			// WooCommerce warns about unsaved changes on leaving the page; a
+			// confirmed reset is a deliberate submission, not an accidental exit.
+			window.onbeforeunload = null;
+			$( window ).off( 'beforeunload' );
+		} );
+
+		$submit.append( $button );
+	}
+
 	$( function () {
 		buildPanels();
-		initColorPickers( $( document ) );
 		initQuestions();
 		initCancelUrlToggle();
+		initResetButton();
 	} );
 } )( jQuery );

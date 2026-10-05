@@ -141,11 +141,12 @@ Contact the Dodo Payments support team at [support@dodopayments.com](mailto:supp
 * Feature: optionally send customers who abandon the hosted checkout back to your store -- to the order pay page so they can retry, to the cart, or to a URL of your choosing. Off by default, matching the Checkout Sessions API.
 * Feature: optionally finalise the order's details when the checkout session is created rather than letting the hosted page collect what is missing. Requires a WooCommerce checkout that captures the full billing address; the plugin checks the order first and fails with a message naming any missing fields rather than passing a request the API will reject.
 * Feature: require only the zipcode at the hosted checkout, via the API's minimal address option.
-* Feature: brand the hosted checkout from the settings page -- theme, language, pay button text, corner radius, fonts, and 16 colours for each of light and dark mode.
+* Feature: set the hosted checkout's theme and language from the settings page.
 * Feature: restrict accepted payment methods, pin a billing currency, force 3-D Secure, show saved payment methods, and set an INR e-mandate minimum.
 * Feature: ask customers up to five extra questions on the hosted checkout, with text, number, email, URL, date, dropdown and yes/no field types.
 * Feature: optionally send the order's billing phone number and company to the hosted checkout so customers are not asked for them twice. Both are off by default, matching the Checkout Sessions API defaults.
 * Enhancement: the settings page is now grouped into collapsible sections, and remembers which ones you left open.
+* Enhancement: a "Reset to defaults" button on the settings page restores every checkout option and feature flag, keeping the general settings, API keys and webhook signing keys.
 * Migration: checkout sessions now use the stackable `discount_codes` field in place of the deprecated `discount_code`.
 * Dev: new `dodo_payments_checkout_session_request` filter over the entire checkout session request body, for the API fields the settings page does not expose.
 
