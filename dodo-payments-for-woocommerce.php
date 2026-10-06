@@ -241,10 +241,6 @@ function dodo_payments_init()
             public function init_form_fields()
             {
                 $webhook_url = add_query_arg('wc-api', $this->id, trailingslashit(home_url()));
-                $webhook_help_description = '<p>' .
-                    __('Webhook endpoint for Dodo Payments. Use the below URL when generating a webhook signing key on Dodo Payments Dashboard.', 'dodo-payments-for-woocommerce')
-                    . '</p><p><code>' . $webhook_url . '</code></p>';
-                ;
 
                 $this->form_fields = array(
                     'enabled' => array(
@@ -292,7 +288,7 @@ function dodo_payments_init()
                         'type' => 'text',
                         'default' => '',
                         'desc_tip' => false,
-                        'description' => __('Your Live Webhook Signing Key. Required to sync status for payments, recommended for setup. Generate one from <b>Dodo Payments (Live Mode) &gt; Developer &gt; Webhooks</b>, use the URL at the bottom of this page as the webhook URL.', 'dodo-payments-for-woocommerce'),
+                        'description' => __('Your Live Webhook Signing Key. Required to sync status for payments, recommended for setup. Generate one from <b>Dodo Payments (Live Mode) &gt; Developer &gt; Webhooks</b>, use the Webhook Endpoint below as the webhook URL.', 'dodo-payments-for-woocommerce'),
                     ),
                     'test_api_key' => array(
                         'title' => __('Test API Key', 'dodo-payments-for-woocommerce'),
@@ -306,7 +302,16 @@ function dodo_payments_init()
                         'type' => 'text',
                         'default' => '',
                         'desc_tip' => false,
-                        'description' => __('Your Test Webhook Signing Key. Optional, only required if you want to receive test payments. Generate one from <b>Dodo Payments (Test Mode) &gt; Developer &gt; Webhooks</b>, use the URL at the bottom of this page as the webhook URL.', 'dodo-payments-for-woocommerce'),
+                        'description' => __('Your Test Webhook Signing Key. Optional, only required if you want to receive test payments. Generate one from <b>Dodo Payments (Test Mode) &gt; Developer &gt; Webhooks</b>, use the Webhook Endpoint below as the webhook URL.', 'dodo-payments-for-woocommerce'),
+                    ),
+                    // A row in the keys table rather than a section heading: a
+                    // heading would close the table, and the tax settings after it
+                    // would then read as part of a webhook section.
+                    'webhook_endpoint' => array(
+                        'title' => __('Webhook Endpoint', 'dodo-payments-for-woocommerce'),
+                        'type' => 'dodo_webhook_url',
+                        'url' => $webhook_url,
+                        'description' => __('Webhook endpoint for Dodo Payments. Use this URL when generating a webhook signing key on Dodo Payments Dashboard.', 'dodo-payments-for-woocommerce'),
                     ),
                     'global_tax_category' => array(
                         'title' => __('Global Tax Category', 'dodo-payments-for-woocommerce'),
@@ -373,12 +378,6 @@ function dodo_payments_init()
                         'description' => $description,
                     );
                 }
-
-                $this->form_fields['webhook_endpoint'] = array(
-                    'title' => __('Webhook Endpoint', 'dodo-payments-for-woocommerce'),
-                    'type' => 'title',
-                    'description' => $webhook_help_description,
-                );
             }
 
             /**
@@ -524,6 +523,41 @@ function dodo_payments_init()
                     apply_filters('woocommerce_settings_api_sanitized_fields_' . $this->id, $this->settings),
                     'yes'
                 );
+            }
+
+            /**
+             * Renders the webhook endpoint as a read-only row beside the signing keys.
+             *
+             * Dispatched by WC_Settings_API for form fields of type `dodo_webhook_url`.
+             * The input has no name, so the URL is never posted or saved.
+             *
+             * @param string $key  Form field key.
+             * @param array<string, mixed> $data Form field definition.
+             * @return string
+             *
+             * @since 0.6.0
+             */
+            public function generate_dodo_webhook_url_html($key, $data)
+            {
+                $field_key = $this->get_field_key($key);
+                $data = wp_parse_args($data, array('title' => '', 'description' => '', 'url' => ''));
+
+                ob_start();
+                ?>
+                <tr valign="top">
+                    <th scope="row" class="titledesc">
+                        <label for="<?php echo esc_attr($field_key); ?>"><?php echo esc_html($data['title']); ?></label>
+                    </th>
+                    <td class="forminp">
+                        <fieldset>
+                            <legend class="screen-reader-text"><span><?php echo esc_html($data['title']); ?></span></legend>
+                            <input class="input-text regular-input code" type="text" id="<?php echo esc_attr($field_key); ?>" value="<?php echo esc_attr($data['url']); ?>" readonly="readonly" />
+                            <p class="description"><?php echo wp_kses_post($data['description']); ?></p>
+                        </fieldset>
+                    </td>
+                </tr>
+                <?php
+                return ob_get_clean();
             }
 
             /**
