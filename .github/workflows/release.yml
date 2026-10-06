@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Create zip archive
         run: zip -r dodo-payments-for-woocommerce.zip . -x ".git/*" ".github/*" ".cursor/*"
@@ -48,7 +48,7 @@ jobs:
       cancel-in-progress: false
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # WordPress.org serves the version named by the Stable tag in readme.txt, so a
       # tag that disagrees with the plugin header or readme would ship the wrong code.
