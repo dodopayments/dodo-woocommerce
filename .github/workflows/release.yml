@@ -36,3 +36,39 @@ jobs:
           asset_path: ./dodo-payments-for-woocommerce.zip
           asset_name: dodo-payments-for-woocommerce.zip
           asset_content_type: application/zip
+
+  deploy:
+    name: Deploy to WordPress.org
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    concurrency:
+      group: wordpress-org-deploy
+      cancel-in-progress: false
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # WordPress.org serves the version named by the Stable tag in readme.txt, so a
+      # tag that disagrees with the plugin header or readme would ship the wrong code.
+      - name: Check the tag matches the plugin version
+        id: version
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          header=$(sed -n 's/^[[:space:]*]*Version:[[:space:]]*//p' dodo-payments-for-woocommerce.php | head -n 1 | tr -d '[:space:]')
+          stable=$(sed -n 's/^Stable tag:[[:space:]]*//p' readme.txt | head -n 1 | tr -d '[:space:]')
+          echo "Tag: $version, plugin header: $header, readme Stable tag: $stable"
+          if [ "$version" != "$header" ] || [ "$version" != "$stable" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match the plugin header Version ($header) and readme.txt Stable tag ($stable)."
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy to the WordPress.org plugin repository
+        uses: 10up/action-wordpress-plugin-deploy@54bd289b8525fd23a5c365ec369185f2966529c2 # 2.3.0
+        env:
+          SVN_USERNAME: ${{ secrets.SVN_USERNAME }}
+          SVN_PASSWORD: ${{ secrets.SVN_PASSWORD }}
+          SLUG: dodo-payments-for-woocommerce
+          VERSION: ${{ steps.version.outputs.version }}
