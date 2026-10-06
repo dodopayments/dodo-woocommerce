@@ -1026,7 +1026,7 @@ class Dodo_Payments_Checkout_Settings
             && in_array(wp_parse_url($value, PHP_URL_SCHEME), array('http', 'https'), true);
 
         if (!$is_valid) {
-            throw new Exception(__('Redirect URLs must be valid http:// or https:// URLs.', 'dodo-payments-for-woocommerce'));
+            throw new Exception(esc_html__('Redirect URLs must be valid http:// or https:// URLs.', 'dodo-payments-for-woocommerce'));
         }
 
         return strtr($value, array_flip($sentinels));
