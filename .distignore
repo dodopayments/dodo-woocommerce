@@ -1,0 +1,12 @@
+# Excluded from the WordPress.org SVN trunk by the release workflow's deploy job.
+/.git
+/.github
+/.gitignore
+/.gitattributes
+/.distignore
+/.wordpress-org
+/.claude
+/.omc
+/.omx
+/.cursor
+.DS_Store
