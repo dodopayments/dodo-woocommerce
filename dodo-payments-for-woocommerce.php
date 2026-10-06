@@ -16,7 +16,7 @@
  * Requires PHP: 7.4
  * Requires at least: 6.1
  * Requires Plugins: woocommerce
- * Tested up to: 7.0
+ * Tested up to: 7.1
  * WC requires at least: 7.9
  * WC tested up to: 9.6
  */
@@ -36,6 +36,7 @@ require_once plugin_dir_path(__FILE__) . 'includes/class-dodo-payments-coupon-db
 require_once plugin_dir_path(__FILE__) . 'includes/class-dodo-payments-subscription-db.php';
 
 require_once plugin_dir_path(__FILE__) . 'includes/class-dodo-payments-cart-exception.php';
+require_once plugin_dir_path(__FILE__) . 'includes/class-dodo-payments-checkout-settings.php';
 
 require_once plugin_dir_path(__FILE__) . 'includes/class-dodo-payments-api.php';
 require_once plugin_dir_path(__FILE__) . 'includes/class-dodo-standard-webhook.php';
@@ -56,6 +57,13 @@ add_action('before_woocommerce_init', function () {
 
 add_action('plugins_loaded', 'dodo_payments_init');
 
+// WooCommerce only saves a settings section when the posted form carries its own
+// `save` button, so a submission from the reset button has to be let through.
+add_filter('woocommerce_save_settings_checkout_dodo_payments', function ($save) {
+    // phpcs:ignore WordPress.Security.NonceVerification.Missing -- Presence check only; WC_Admin_Settings::save() verifies the nonce.
+    return $save || !empty($_POST[Dodo_Payments_Checkout_Settings::RESET_FIELD]);
+});
+
 /**
  * Initializes the Dodo Payments payment gateway for WooCommerce.
  *
@@ -71,7 +79,6 @@ function dodo_payments_init()
             private bool $testmode;
             private string $api_key;
             private string $webhook_key;
-            private string $return_url;
 
             protected Dodo_Payments_API $dodo_payments_api;
 
@@ -85,6 +92,15 @@ function dodo_payments_init()
              * @var array<string, bool>
              */
             private array $checkout_feature_flags = array();
+
+            /**
+             * Checkout Session request fragment assembled from the settings page.
+             * Order-independent; the return and cancel URLs are resolved per order
+             * at payment time.
+             *
+             * @var array<string, mixed>
+             */
+            private array $checkout_options = array();
 
             public function __construct()
             {
@@ -120,7 +136,6 @@ function dodo_payments_init()
                 $this->title = $this->get_option('title');
                 $this->description = $this->get_option('description');
                 $this->instructions = $this->get_option('instructions');
-                $this->return_url = $this->get_option('return_url');
 
                 $this->testmode = 'yes' === $this->get_option('testmode');
                 $this->api_key = $this->testmode ? $this->get_option('test_api_key') : $this->get_option('live_api_key');
@@ -129,16 +144,24 @@ function dodo_payments_init()
                 $this->global_tax_category = $this->get_option('global_tax_category');
                 $this->global_tax_inclusive = 'yes' === $this->get_option('global_tax_inclusive');
 
-                $this->checkout_feature_flags = $this->get_checkout_feature_flag_overrides();
-
+                // Read after init_form_fields()/init_settings(): WC_Settings_API falls
+                // back to a field's declared default only once the form fields are
+                // registered, and several of the checkout options default to "yes".
                 $this->init_form_fields();
                 $this->init_settings();
+
+                $this->checkout_feature_flags = $this->get_checkout_feature_flag_overrides();
+                $this->checkout_options = Dodo_Payments_Checkout_Settings::build_request_options(
+                    array($this, 'get_option')
+                );
 
                 $this->init_dodo_payments_api();
 
                 add_action('woocommerce_update_options_payment_gateways_' . $this->id, array($this, 'process_admin_options'));
 
                 add_action('admin_notices', array($this, 'display_errors'));
+
+                add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_assets'));
 
                 add_action('woocommerce_thankyou_' . $this->id, array($this, 'thank_you_page'));
 
@@ -202,6 +225,9 @@ function dodo_payments_init()
                     'global_tax_category' => $this->global_tax_category,
                     'global_tax_inclusive' => $this->global_tax_inclusive,
                     'feature_flags' => $this->checkout_feature_flags,
+                    'checkout_options' => $this->checkout_options,
+                    'send_customer_phone' => 'yes' === $this->get_option(Dodo_Payments_Checkout_Settings::PREFIX . 'send_phone'),
+                    'send_customer_business_name' => 'yes' === $this->get_option(Dodo_Payments_Checkout_Settings::PREFIX . 'send_business_name'),
                 ));
             }
 
@@ -215,10 +241,6 @@ function dodo_payments_init()
             public function init_form_fields()
             {
                 $webhook_url = add_query_arg('wc-api', $this->id, trailingslashit(home_url()));
-                $webhook_help_description = '<p>' .
-                    __('Webhook endpoint for Dodo Payments. Use the below URL when generating a webhook signing key on Dodo Payments Dashboard.', 'dodo-payments-for-woocommerce')
-                    . '</p><p><code>' . $webhook_url . '</code></p>';
-                ;
 
                 $this->form_fields = array(
                     'enabled' => array(
@@ -266,7 +288,7 @@ function dodo_payments_init()
                         'type' => 'text',
                         'default' => '',
                         'desc_tip' => false,
-                        'description' => __('Your Live Webhook Signing Key. Required to sync status for payments, recommended for setup. Generate one from <b>Dodo Payments (Live Mode) &gt; Developer &gt; Webhooks</b>, use the URL at the bottom of this page as the webhook URL.', 'dodo-payments-for-woocommerce'),
+                        'description' => __('Your Live Webhook Signing Key. Required to sync status for payments, recommended for setup. Generate one from <b>Dodo Payments (Live Mode) &gt; Developer &gt; Webhooks</b>, use the Webhook Endpoint below as the webhook URL.', 'dodo-payments-for-woocommerce'),
                     ),
                     'test_api_key' => array(
                         'title' => __('Test API Key', 'dodo-payments-for-woocommerce'),
@@ -280,7 +302,16 @@ function dodo_payments_init()
                         'type' => 'text',
                         'default' => '',
                         'desc_tip' => false,
-                        'description' => __('Your Test Webhook Signing Key. Optional, only required if you want to receive test payments. Generate one from <b>Dodo Payments (Test Mode) &gt; Developer &gt; Webhooks</b>, use the URL at the bottom of this page as the webhook URL.', 'dodo-payments-for-woocommerce'),
+                        'description' => __('Your Test Webhook Signing Key. Optional, only required if you want to receive test payments. Generate one from <b>Dodo Payments (Test Mode) &gt; Developer &gt; Webhooks</b>, use the Webhook Endpoint below as the webhook URL.', 'dodo-payments-for-woocommerce'),
+                    ),
+                    // A row in the keys table rather than a section heading: a
+                    // heading would close the table, and the tax settings after it
+                    // would then read as part of a webhook section.
+                    'webhook_endpoint' => array(
+                        'title' => __('Webhook Endpoint', 'dodo-payments-for-woocommerce'),
+                        'type' => 'dodo_webhook_url',
+                        'url' => $webhook_url,
+                        'description' => __('Webhook endpoint for Dodo Payments. Use this URL when generating a webhook signing key on Dodo Payments Dashboard.', 'dodo-payments-for-woocommerce'),
                     ),
                     'global_tax_category' => array(
                         'title' => __('Global Tax Category', 'dodo-payments-for-woocommerce'),
@@ -302,18 +333,24 @@ function dodo_payments_init()
                         'desc_tip' => false,
                         'description' => __('Select if tax is included on all product prices. You can override this on a per-product basis on Dodo Payments Dashboard.', 'dodo-payments-for-woocommerce'),
                     ),
-                    'return_url' => array(
-                        'title' => __('Return URL', 'dodo-payments-for-woocommerce'),
-                        'type' => 'text',
-                        'default' => '',
-                        'desc_tip' => false,
-                        'description' => __('Where the customer is redirected after paying on the hosted Dodo Payments checkout. Leave blank to use the default WooCommerce order-received page.', 'dodo-payments-for-woocommerce'),
-                    ),
-                    'checkout_feature_flags_section' => array(
-                        'title' => __('Checkout Feature Flags', 'dodo-payments-for-woocommerce'),
-                        'type' => 'title',
-                        'description' => __('Control the behavior of the hosted Dodo Payments checkout page. Flags set to "Default" are not sent with the checkout session, so the Dodo Payments API applies its default.', 'dodo-payments-for-woocommerce'),
-                    ),
+                );
+
+                // Checkout Session options, in front of the feature flags so the
+                // page reads outermost-first: where customers go, how the page
+                // looks, then the finer behavioural switches.
+                $this->form_fields = array_merge(
+                    $this->form_fields,
+                    Dodo_Payments_Checkout_Settings::form_fields()
+                );
+
+                // Collapsible, like the sections above it. Before 0.6.0 nothing on
+                // this page folded; this section is long enough that leaving it
+                // as the one flat block on the screen would be the odd one out.
+                $this->form_fields['checkout_feature_flags_section'] = array(
+                    'title' => __('Checkout Feature Flags', 'dodo-payments-for-woocommerce'),
+                    'type' => 'title',
+                    'class' => Dodo_Payments_Checkout_Settings::SECTION_CLASS,
+                    'description' => __('Control the behavior of the hosted Dodo Payments checkout page. Flags set to "Default" are not sent with the checkout session, so the Dodo Payments API applies its default.', 'dodo-payments-for-woocommerce'),
                 );
 
                 foreach (self::checkout_feature_flag_definitions() as $flag_key => $flag) {
@@ -341,12 +378,6 @@ function dodo_payments_init()
                         'description' => $description,
                     );
                 }
-
-                $this->form_fields['webhook_endpoint'] = array(
-                    'title' => __('Webhook Endpoint', 'dodo-payments-for-woocommerce'),
-                    'type' => 'title',
-                    'description' => $webhook_help_description,
-                );
             }
 
             /**
@@ -461,22 +492,235 @@ function dodo_payments_init()
             }
 
             /**
-             * Resolves the URL the customer is sent to after paying, falling back to
-             * WooCommerce's default order-received page when no return URL is
-             * configured, or when the configured value isn't a valid http(s) URL.
+             * Saves the settings form, or resets the checkout settings when the
+             * reset button submitted it.
              *
-             * @param \WC_Order $order
+             * A reset clears the Checkout Session options and feature flags only;
+             * the general settings, API keys and tax options are kept. Unsaved
+             * edits elsewhere on the page are discarded rather than half-applied.
+             * WooCommerce has already verified the settings nonce and the
+             * manage_woocommerce capability before this runs.
+             *
+             * @return bool Whether anything was saved.
+             *
+             * @since 0.6.0
+             */
+            public function process_admin_options()
+            {
+                // phpcs:ignore WordPress.Security.NonceVerification.Missing -- Verified by WC_Admin_Settings::save().
+                if (empty($_POST[Dodo_Payments_Checkout_Settings::RESET_FIELD])) {
+                    return parent::process_admin_options();
+                }
+
+                $this->init_settings();
+                $this->settings = Dodo_Payments_Checkout_Settings::reset_settings(
+                    $this->settings,
+                    array(Dodo_Payments_Checkout_Settings::PREFIX, 'feature_flag_')
+                );
+
+                return update_option(
+                    $this->get_option_key(),
+                    apply_filters('woocommerce_settings_api_sanitized_fields_' . $this->id, $this->settings),
+                    'yes'
+                );
+            }
+
+            /**
+             * Renders the webhook endpoint as a row beside the signing keys.
+             *
+             * Dispatched by WC_Settings_API for form fields of type `dodo_webhook_url`.
+             * The URL is shown as wrapping text rather than in an input, which
+             * would clip a long site address. The copy button ships hidden and is
+             * revealed by the admin script once it is wired up, so it never shows
+             * as a button that does nothing.
+             *
+             * @param string $key  Form field key.
+             * @param array<string, mixed> $data Form field definition.
+             * @return string
+             *
+             * @since 0.6.0
+             */
+            public function generate_dodo_webhook_url_html($key, $data)
+            {
+                $field_key = $this->get_field_key($key);
+                $data = wp_parse_args($data, array('title' => '', 'description' => '', 'url' => ''));
+
+                ob_start();
+                ?>
+                <tr valign="top">
+                    <th scope="row" class="titledesc">
+                        <?php echo esc_html($data['title']); ?>
+                    </th>
+                    <td class="forminp">
+                        <div class="dodo-webhook-url">
+                            <code class="dodo-webhook-url__value" id="<?php echo esc_attr($field_key); ?>"><?php echo esc_html($data['url']); ?></code>
+                            <button type="button" class="button dodo-copy" data-copy-target="<?php echo esc_attr($field_key); ?>" hidden>
+                                <?php esc_html_e('Copy', 'dodo-payments-for-woocommerce'); ?>
+                            </button>
+                            <span class="dodo-copy__status" role="status" aria-live="polite"></span>
+                        </div>
+                        <p class="description"><?php echo wp_kses_post($data['description']); ?></p>
+                    </td>
+                </tr>
+                <?php
+                return ob_get_clean();
+            }
+
+            /**
+             * Renders the repeatable extra-questions table.
+             *
+             * Dispatched by WC_Settings_API for form fields of type `dodo_custom_fields`.
+             *
+             * @param string $key  Form field key.
+             * @param array<string, mixed> $data Form field definition.
+             * @return string
+             *
+             * @since 0.6.0
+             */
+            public function generate_dodo_custom_fields_html($key, $data)
+            {
+                return Dodo_Payments_Checkout_Settings::render_custom_fields(
+                    $this->get_field_key($key),
+                    wp_parse_args($data, array('title' => '', 'description' => '')),
+                    $this->get_option($key)
+                );
+            }
+
+            /**
+             * Loads the repeater, the reset button and the collapsible sections.
+             *
+             * Restricted to this gateway's own settings screen: the settings page
+             * is the only place any of this markup exists, and WooCommerce admin
+             * screens are shared with every other gateway.
+             *
+             * @return void
+             *
+             * @since 0.6.0
+             */
+            public function enqueue_admin_assets()
+            {
+                if (!$this->is_gateway_settings_screen()) {
+                    return;
+                }
+
+                $version = self::plugin_version();
+
+                wp_enqueue_style(
+                    'dodo-payments-admin-settings',
+                    plugins_url('/assets/admin-settings.css', __FILE__),
+                    array(),
+                    $version
+                );
+
+                if (wp_script_is('wc-enhanced-select', 'registered')) {
+                    wp_enqueue_script('wc-enhanced-select');
+                }
+
+                wp_enqueue_script(
+                    'dodo-payments-admin-settings',
+                    plugins_url('/assets/admin-settings.js', __FILE__),
+                    array('jquery'),
+                    $version,
+                    true
+                );
+
+                wp_localize_script(
+                    'dodo-payments-admin-settings',
+                    'dodoPaymentsSettings',
+                    array(
+                        'sectionClass' => Dodo_Payments_Checkout_Settings::SECTION_CLASS,
+                        'cancelModeField' => $this->get_field_key(Dodo_Payments_Checkout_Settings::PREFIX . 'cancel_url_mode'),
+                        'cancelCustomField' => $this->get_field_key(Dodo_Payments_Checkout_Settings::PREFIX . 'cancel_url_custom'),
+                        'resetField' => Dodo_Payments_Checkout_Settings::RESET_FIELD,
+                        'i18n' => array(
+                            'reset' => __('Reset to defaults', 'dodo-payments-for-woocommerce'),
+                            'copied' => __('Copied', 'dodo-payments-for-woocommerce'),
+                            'copyFailed' => __('Press Ctrl+C (⌘C on Mac) to copy', 'dodo-payments-for-woocommerce'),
+                            'resetConfirm' => __('Reset every checkout option and feature flag to its default? Your general settings, API keys and webhook signing keys are kept. Unsaved changes on this page will be lost.', 'dodo-payments-for-woocommerce'),
+                            'oneField' => __('1 setting', 'dodo-payments-for-woocommerce'),
+                            /* translators: %d: number of settings in the section */
+                            'manyFields' => __('%d settings', 'dodo-payments-for-woocommerce'),
+                        ),
+                    )
+                );
+            }
+
+            /**
+             * Whether the current admin request is this gateway's settings screen.
+             *
+             * @return bool
+             *
+             * @since 0.6.0
+             */
+            private function is_gateway_settings_screen()
+            {
+                if (!function_exists('get_current_screen')) {
+                    return false;
+                }
+
+                $screen = get_current_screen();
+
+                if (!$screen || 'woocommerce_page_wc-settings' !== $screen->id) {
+                    return false;
+                }
+
+                // Read-only screen detection for asset loading; no state is changed
+                // here, so a nonce check would be meaningless.
+                // phpcs:disable WordPress.Security.NonceVerification.Recommended
+                $tab = isset($_GET['tab']) ? sanitize_text_field(wp_unslash($_GET['tab'])) : '';
+                $section = isset($_GET['section']) ? sanitize_text_field(wp_unslash($_GET['section'])) : '';
+                // phpcs:enable WordPress.Security.NonceVerification.Recommended
+
+                return 'checkout' === $tab && $this->id === $section;
+            }
+
+            /**
+             * The plugin version, used to bust cached admin assets.
+             *
+             * Falls back to the file's modification time rather than a literal, so
+             * there is no second copy of the version to drift out of step with the
+             * plugin header.
+             *
+             * @return string
+             *
+             * @since 0.6.0
+             */
+            private static function plugin_version()
+            {
+                if (!function_exists('get_plugin_data')) {
+                    require_once ABSPATH . 'wp-admin/includes/plugin.php';
+                }
+
+                $data = get_plugin_data(__FILE__, false, false);
+
+                if (!empty($data['Version'])) {
+                    return $data['Version'];
+                }
+
+                $modified = filemtime(__FILE__);
+
+                return $modified ? (string) $modified : '';
+            }
+
+            /**
+             * Resolves the URL the customer is sent to after paying.
+             *
+             * The configured return URL falls back to exactly what the gateway
+             * sent before the setting existed, so an unconfigured store is
+             * unaffected.
+             *
+             * @param WC_Order $order
              * @return string
              *
              * @since 0.6.0
              */
             private function get_checkout_return_url($order)
             {
-                $return_url = $this->get_return_url($order);
-
-                if (!empty($this->return_url) && self::is_valid_redirect_url($this->return_url)) {
-                    $return_url = $this->return_url;
-                }
+                $return_url = Dodo_Payments_Checkout_Settings::resolve_return_url(
+                    $this->get_option(Dodo_Payments_Checkout_Settings::PREFIX . 'return_url'),
+                    $this->get_return_url($order),
+                    $order
+                );
 
                 /**
                  * Filters the URL the customer is redirected to after a successful checkout.
@@ -487,44 +731,6 @@ function dodo_payments_init()
                  * @since 0.6.0
                  */
                 return apply_filters('dodo_payments_checkout_return_url', $return_url, $order);
-            }
-
-            /**
-             * Checks a URL is well-formed http(s).
-             *
-             * @param string $url
-             * @return bool
-             *
-             * @since 0.6.0
-             */
-            private static function is_valid_redirect_url($url)
-            {
-                if (false === filter_var($url, FILTER_VALIDATE_URL)) {
-                    return false;
-                }
-
-                return in_array(wp_parse_url($url, PHP_URL_SCHEME), array('http', 'https'), true);
-            }
-
-            /**
-             * Validates the Return URL setting field.
-             *
-             * @param string $key
-             * @param string|null $value
-             * @return string
-             * @throws Exception If the value is set and isn't a valid http(s) URL.
-             *
-             * @since 0.6.0
-             */
-            public function validate_return_url_field($key, $value)
-            {
-                $value = $this->validate_text_field($key, $value);
-
-                if ('' !== $value && !self::is_valid_redirect_url($value)) {
-                    throw new Exception(__('Return URL must be a valid http:// or https:// URL.', 'dodo-payments-for-woocommerce'));
-                }
-
-                return $value;
             }
 
             public function process_payment($order_id)
@@ -616,12 +822,20 @@ function dodo_payments_init()
                         }
                     }
 
+                    $cancel_url = Dodo_Payments_Checkout_Settings::resolve_cancel_url(
+                        $this->get_option(Dodo_Payments_Checkout_Settings::PREFIX . 'cancel_url_mode'),
+                        $this->get_option(Dodo_Payments_Checkout_Settings::PREFIX . 'cancel_url_custom'),
+                        $order
+                    );
+
                     $response = $this->dodo_payments_api->create_checkout_session(
                         $order,
                         $synced_products,
                         $dodo_discount_code,
                         $this->get_checkout_return_url($order),
-                        $metadata
+                        $metadata,
+                        null,
+                        $cancel_url
                     );
                 } catch (Exception $e) {
                     $order->add_order_note(
