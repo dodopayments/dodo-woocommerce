@@ -526,10 +526,13 @@ function dodo_payments_init()
             }
 
             /**
-             * Renders the webhook endpoint as a read-only row beside the signing keys.
+             * Renders the webhook endpoint as a row beside the signing keys.
              *
              * Dispatched by WC_Settings_API for form fields of type `dodo_webhook_url`.
-             * The input has no name, so the URL is never posted or saved.
+             * The URL is shown as wrapping text rather than in an input, which
+             * would clip a long site address. The copy button ships hidden and is
+             * revealed by the admin script once it is wired up, so it never shows
+             * as a button that does nothing.
              *
              * @param string $key  Form field key.
              * @param array<string, mixed> $data Form field definition.
@@ -546,14 +549,17 @@ function dodo_payments_init()
                 ?>
                 <tr valign="top">
                     <th scope="row" class="titledesc">
-                        <label for="<?php echo esc_attr($field_key); ?>"><?php echo esc_html($data['title']); ?></label>
+                        <?php echo esc_html($data['title']); ?>
                     </th>
                     <td class="forminp">
-                        <fieldset>
-                            <legend class="screen-reader-text"><span><?php echo esc_html($data['title']); ?></span></legend>
-                            <input class="input-text regular-input code" type="text" id="<?php echo esc_attr($field_key); ?>" value="<?php echo esc_attr($data['url']); ?>" readonly="readonly" />
-                            <p class="description"><?php echo wp_kses_post($data['description']); ?></p>
-                        </fieldset>
+                        <div class="dodo-webhook-url">
+                            <code class="dodo-webhook-url__value" id="<?php echo esc_attr($field_key); ?>"><?php echo esc_html($data['url']); ?></code>
+                            <button type="button" class="button dodo-copy" data-copy-target="<?php echo esc_attr($field_key); ?>" hidden>
+                                <?php esc_html_e('Copy', 'dodo-payments-for-woocommerce'); ?>
+                            </button>
+                            <span class="dodo-copy__status" role="status" aria-live="polite"></span>
+                        </div>
+                        <p class="description"><?php echo wp_kses_post($data['description']); ?></p>
                     </td>
                 </tr>
                 <?php
@@ -628,6 +634,8 @@ function dodo_payments_init()
                         'resetField' => Dodo_Payments_Checkout_Settings::RESET_FIELD,
                         'i18n' => array(
                             'reset' => __('Reset to defaults', 'dodo-payments-for-woocommerce'),
+                            'copied' => __('Copied', 'dodo-payments-for-woocommerce'),
+                            'copyFailed' => __('Press Ctrl+C (⌘C on Mac) to copy', 'dodo-payments-for-woocommerce'),
                             'resetConfirm' => __('Reset every checkout option and feature flag to its default? Your general settings, API keys and webhook signing keys are kept. Unsaved changes on this page will be lost.', 'dodo-payments-for-woocommerce'),
                             'oneField' => __('1 setting', 'dodo-payments-for-woocommerce'),
                             /* translators: %d: number of settings in the section */

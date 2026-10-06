@@ -1,9 +1,9 @@
 /**
  * Dodo Payments -- gateway settings screen behaviour.
  *
- * Three responsibilities: fold the long settings form into collapsible sections,
- * drive the repeatable "extra checkout questions" table, and add the button that
- * resets the checkout settings to their defaults.
+ * Folds the long settings form into collapsible sections, drives the repeatable
+ * "extra checkout questions" table, adds the button that resets the checkout
+ * settings to their defaults, and wires up the webhook endpoint's copy button.
  */
 ( function ( $ ) {
 	'use strict';
@@ -274,10 +274,109 @@
 		$submit.append( $button );
 	}
 
+	/**
+	 * Copies text through the legacy execCommand path.
+	 *
+	 * The Clipboard API is only available in a secure context, and wp-admin is
+	 * still served over plain http on some stores.
+	 *
+	 * @param {string} text Text to copy.
+	 * @return {boolean} Whether the browser reports the copy succeeded.
+	 */
+	function legacyCopy( text ) {
+		var $area = $( '<textarea/>', { readonly: 'readonly' } )
+			.val( text )
+			.css( { position: 'fixed', top: 0, left: 0, opacity: 0 } )
+			.appendTo( document.body );
+		var copied = false;
+
+		$area[ 0 ].select();
+
+		try {
+			copied = document.execCommand( 'copy' );
+		} catch ( e ) {
+			copied = false;
+		}
+
+		$area.remove();
+
+		return copied;
+	}
+
+	/**
+	 * Selects an element's text so the admin can copy it by hand.
+	 *
+	 * @param {Element} element Element whose text to select.
+	 */
+	function selectText( element ) {
+		var range = document.createRange();
+		var selection = window.getSelection();
+
+		range.selectNodeContents( element );
+		selection.removeAllRanges();
+		selection.addRange( range );
+	}
+
+	/**
+	 * Wires up the copy buttons and reveals them.
+	 *
+	 * Tries the Clipboard API, then the legacy copy command, and as a last
+	 * resort selects the text and tells the admin to copy it themselves.
+	 */
+	function initCopyButtons() {
+		if ( ! i18n.copied || ! i18n.copyFailed ) {
+			return;
+		}
+
+		$( '.dodo-copy' ).each( function () {
+			var $button = $( this );
+			var $target = $( '#' + $button.data( 'copy-target' ) );
+			var $status = $button.siblings( '.dodo-copy__status' );
+			var timer = null;
+
+			if ( ! $target.length ) {
+				return;
+			}
+
+			function report( copied ) {
+				if ( ! copied ) {
+					selectText( $target[ 0 ] );
+				}
+
+				$status.text( copied ? i18n.copied : i18n.copyFailed );
+				window.clearTimeout( timer );
+				timer = window.setTimeout( function () {
+					$status.text( '' );
+				}, 4000 );
+			}
+
+			$button.on( 'click', function () {
+				var text = $.trim( $target.text() );
+
+				if ( navigator.clipboard && window.isSecureContext ) {
+					navigator.clipboard.writeText( text ).then(
+						function () {
+							report( true );
+						},
+						function () {
+							report( legacyCopy( text ) );
+						}
+					);
+					return;
+				}
+
+				report( legacyCopy( text ) );
+			} );
+
+			$button.prop( 'hidden', false );
+		} );
+	}
+
 	$( function () {
 		buildPanels();
 		initQuestions();
 		initCancelUrlToggle();
 		initResetButton();
+		initCopyButtons();
 	} );
 } )( jQuery );

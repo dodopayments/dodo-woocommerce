@@ -250,3 +250,29 @@
 .dodo-reset-defaults {
 	margin-left: 0.5rem;
 }
+
+/* ---------------------------------------------------------------------------
+   Webhook endpoint
+   --------------------------------------------------------------------------- */
+
+.dodo-webhook-url {
+	align-items: center;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+	max-width: 40rem;
+}
+
+/* The whole URL stays visible: long site addresses wrap instead of clipping. */
+.dodo-webhook-url__value {
+	flex: 1 1 18rem;
+	min-width: 0;
+	overflow-wrap: anywhere;
+	padding: 0.375rem 0.5rem;
+	user-select: all;
+}
+
+.dodo-copy__status {
+	color: #646970;
+	font-size: 0.75rem;
+}
