@@ -3,7 +3,7 @@ Contributors: ayushdodopayments
 Tags: payments, woocommerce, dodo payments, merchant of record, subscriptions
 Requires at least: 6.1
 Tested up to: 7.1
-Stable tag: 0.6.0
+Stable tag: 0.6.1
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -135,6 +135,11 @@ Dodo Payments appears as the merchant. Your product or brand reference is includ
 Contact the Dodo Payments support team at [support@dodopayments.com](mailto:support@dodopayments.com). You can also access support through the "Get Support" icon on the [Dodo Payments Dashboard](https://app.dodopayments.com). For more information, visit [dodopayments.com](https://dodopayments.com).
 
 == Changelog ==
+
+= 0.6.1 =
+* Fix: a subscription's first payment no longer creates an extra renewal order, so each new subscription has one paid order per payment. Redelivered payment webhooks no longer create duplicate renewal orders either.
+* Fix: webhook signatures are verified against the raw request body. Sanitizing the body first altered legitimate payloads containing characters such as `%`, `<`, repeated spaces or line breaks, so they failed verification.
+* Fix: webhooks with an invalid signing key or signature are now rejected with a 401 in live mode as well as test mode, so Dodo Payments retries the delivery instead of treating it as successful.
 
 = 0.6.0 =
 * Feature: configure the hosted checkout's return URL from the settings page, with `{order_id}`, `{order_key}` and `{order_number}` placeholders. Leaving it empty keeps the WooCommerce order received page.
