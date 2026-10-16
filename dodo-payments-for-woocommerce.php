@@ -5,7 +5,7 @@
  * Plugin URI: https://dodopayments.com
  * Short Description: Accept payments globally within minutes.
  * Description: Dodo Payments plugin for WooCommerce. Accept payments from your customers using Dodo Payments.
- * Version: 0.6.0
+ * Version: 0.6.1
  * Author: Dodo Payments
  * Developer: Dodo Payments
  * Text Domain: dodo-payments-for-woocommerce
@@ -1236,17 +1236,20 @@ function dodo_payments_init()
                     'webhook-timestamp' => isset($_SERVER['HTTP_WEBHOOK_TIMESTAMP']) ? sanitize_text_field($_SERVER['HTTP_WEBHOOK_TIMESTAMP']) : '',
                 ];
 
-                $body = sanitize_text_field(file_get_contents('php://input'));
+                // The raw body is required: the signature is computed over the exact
+                // bytes Dodo Payments sent, so any sanitization before verification
+                // corrupts legitimate payloads (e.g. `%xx`, `<`, repeated whitespace)
+                // and makes them fail verification. The verified signature is what
+                // validates this input.
+                $body = file_get_contents('php://input');
 
+                // Signature failures are always rejected with a non-2xx status so that
+                // Dodo Payments does not treat the delivery as successful and retries it.
                 try {
                     $webhook = new Dodo_Payments_Standard_Webhook($this->webhook_key);
                 } catch (\Exception $e) {
                     error_log('Dodo Payments: Invalid webhook key: ' . $e->getMessage());
-                    if ($this->testmode) {
-                        status_header(401);
-                    } else {
-                        $this->consume_webhook_silently();
-                    }
+                    status_header(401);
                     return;
                 }
 
@@ -1254,11 +1257,7 @@ function dodo_payments_init()
                     $payload = $webhook->verify($body, $headers);
                 } catch (Exception $e) {
                     error_log('Dodo Payments: Could not verify webhook event: ' . $e->getMessage());
-                    if ($this->testmode) {
-                        status_header(401);
-                    } else {
-                        $this->consume_webhook_silently();
-                    }
+                    status_header(401);
                     return;
                 }
 
@@ -1334,7 +1333,18 @@ function dodo_payments_init()
 
                 switch ($status) {
                     case 'succeeded':
+                        $was_completed = $order->has_status('completed');
                         $order->payment_complete($payment_id);
+
+                        // payment_complete() only records the transaction ID while the
+                        // order is still awaiting payment. If an earlier event already
+                        // moved it to processing, record the first payment here so it
+                        // is not later mistaken for a renewal.
+                        if (!$was_completed && $order->get_transaction_id() === '') {
+                            $order->set_transaction_id($payment_id);
+                            $order->save();
+                        }
+
                         $order->update_status('completed', __('Payment completed by Dodo Payments', 'dodo-payments-for-woocommerce'));
 
                         if (isset($payload['data']['subscription_id'])) {
@@ -1365,6 +1375,13 @@ function dodo_payments_init()
                                     . $subscription_id
                                 );
                                 return;
+                            }
+
+                            // The initial payment pays the parent order, and webhook
+                            // deliveries can be retried: only create a renewal order
+                            // for a payment that no order of this subscription has yet.
+                            if ($this->subscription_has_payment($subscription, $payment_id)) {
+                                break;
                             }
 
                             $dodo_subscription = $this->dodo_payments_api->get_subscription($subscription_id);
@@ -1557,6 +1574,27 @@ function dodo_payments_init()
                 // TODO: handle renewal from the 'subscription.renewed' webhook when
                 // it includes the `payment_id` and pass it to `$order->payment_complete($payment_id)`.
                 // This will help the merchant link the renewal order to the payment ID.
+            }
+
+            /**
+             * Check whether a Dodo payment is already recorded on the subscription's
+             * parent or renewal orders.
+             *
+             * @param WC_Subscription $subscription
+             * @param string $payment_id
+             * @return bool
+             */
+            private function subscription_has_payment($subscription, $payment_id)
+            {
+                $related_orders = $subscription->get_related_orders('all', array('parent', 'renewal'));
+
+                foreach ($related_orders as $related_order) {
+                    if ($related_order && $related_order->get_transaction_id() === $payment_id) {
+                        return true;
+                    }
+                }
+
+                return false;
             }
 
             /**

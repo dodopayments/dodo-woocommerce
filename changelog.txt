@@ -1,5 +1,10 @@
 *** Dodo Payments for WooCommerce Changelog ***
 
+2026-10-16 - version 0.6.1
+* Fix: a subscription's first payment no longer creates an extra renewal order, so each new subscription has one paid order per payment. Redelivered payment webhooks no longer create duplicate renewal orders either.
+* Fix: webhook signatures are verified against the raw request body. Sanitizing the body first altered legitimate payloads containing characters such as `%`, `<`, repeated spaces or line breaks, so they failed verification.
+* Fix: webhooks with an invalid signing key or signature are now rejected with a 401 in live mode as well as test mode, so Dodo Payments retries the delivery instead of treating it as successful.
+
 2026-08-21 - version 0.6.0
 * Feature: configure the hosted checkout's return URL from the settings page, with `{order_id}`, `{order_key}` and `{order_number}` placeholders. Leaving it empty keeps the WooCommerce order received page.
 * Feature: optionally send customers who abandon the hosted checkout back to your store -- to the order pay page so they can retry, to the cart, or to a URL of your choosing. Off by default, matching the Checkout Sessions API.
