@@ -961,7 +961,7 @@ function dodo_payments_init()
                     $mapped_products[] = array(
                         'product_id' => $dodo_product_id,
                         'quantity' => $item->get_quantity(),
-                        'amount' => (int) $product->get_price() * 100
+                        'amount' => Dodo_Payments_API::to_minor_units($product->get_price())
                     );
                 }
 
