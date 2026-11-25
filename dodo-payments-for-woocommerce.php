@@ -16,7 +16,6 @@
  * Requires PHP: 7.4
  * Requires at least: 6.1
  * Requires Plugins: woocommerce
- * Tested up to: 7.1
  * WC requires at least: 7.9
  * WC tested up to: 9.6
  */
@@ -961,7 +960,7 @@ function dodo_payments_init()
                     $mapped_products[] = array(
                         'product_id' => $dodo_product_id,
                         'quantity' => $item->get_quantity(),
-                        'amount' => (int) $product->get_price() * 100
+                        'amount' => Dodo_Payments_API::to_minor_units($product->get_price())
                     );
                 }
 
